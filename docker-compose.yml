@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nuru-dashboard
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    environment:
+      - TZ=Europe/Paris
