@@ -26,7 +26,20 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Loader visible tant que React n'a pas monté -->
+      <div id="app-loader" style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;">
+        <div style="width:48px;height:48px;border:3px solid #2a2520;border-top-color:#c4a962;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <p style="color:#8a7e6d;font-size:14px;">Chargement du dashboard...</p>
+      </div>
+    </div>
+    <noscript>
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:20px;text-align:center;">
+        <p style="color:#c4a962;font-size:18px;font-weight:600;">NURU - Dashboard Programmatique</p>
+        <p style="color:#e8dcc8;font-size:14px;">JavaScript est requis pour afficher ce dashboard.<br/>Veuillez activer JavaScript dans votre navigateur.</p>
+      </div>
+    </noscript>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
