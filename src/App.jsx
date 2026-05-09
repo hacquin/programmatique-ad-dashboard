@@ -82,6 +82,50 @@ const LEXIQUE = [
 ];
 
 // =====================================================================
+// METRIC INFO — definitions affichees via le bouton "?" dans les tableaux/KPIs
+// La cle est la version minuscule/normalisee de l'entete de colonne ou du label KPI.
+// =====================================================================
+const METRIC_INFO = {
+  "impressions": { title: "Impressions", desc: "Nombre total de fois où la publicité a été chargée/diffusée sur une page. Ça ne signifie pas qu'elle a été vue — juste qu'elle a été envoyée." },
+  "impr.": { title: "Impressions", desc: "Nombre total de fois où la publicité a été chargée/diffusée sur une page." },
+  "impressions totales": { title: "Impressions totales", desc: "Nombre total de fois où la publicité a été chargée/diffusée, avant filtrage par la mesure de visibilité." },
+  "impressions visibles": { title: "Impressions visibles", desc: "Nombre d'impressions réellement vues selon les standards IAB (50% des pixels visibles pendant 1s en display, 2s en vidéo)." },
+  "mesurables": { title: "Mesurables", desc: "Nombre d'impressions que l'outil de tracking a pu analyser. Certaines impressions ne le sont pas à cause de blocages techniques (ad-blockers, iframes sécurisées…)." },
+  "vues": { title: "Vues", desc: "Nombre d'impressions mesurables réellement vues selon les standards IAB : 50% des pixels visibles pendant 1s (display) ou 2s (vidéo)." },
+  "viewability": { title: "Viewability", desc: "Part des impressions mesurables qui ont été réellement vues. Formule : Vues ÷ Mesurables. Mesure la qualité des emplacements." },
+  "viewab.": { title: "Viewability", desc: "Part des impressions mesurables qui ont été réellement vues. Formule : Vues ÷ Mesurables." },
+  "taux mesure": { title: "Taux de mesure", desc: "Part des impressions qui ont pu être analysées par l'outil de tracking. Formule : Mesurables ÷ Impressions. Mesure la fiabilité de la donnée collectée." },
+  "clics": { title: "Clics", desc: "Nombre de fois où un utilisateur a cliqué sur la publicité." },
+  "ctr": { title: "CTR (Click-Through Rate)", desc: "Taux de clic : pourcentage d'impressions ayant généré un clic. Formule : Clics ÷ Impressions × 100." },
+  "cpm": { title: "CPM (Cost Per Mille)", desc: "Coût pour 1 000 impressions. Indicateur standard du coût d'achat média. Formule : Dépenses ÷ Impressions × 1 000." },
+  "cpc": { title: "CPC (Cost Per Click)", desc: "Coût par clic : montant moyen payé pour chaque clic. Formule : Dépenses ÷ Clics." },
+  "cpa": { title: "CPA (Cost Per Acquisition)", desc: "Coût par conversion : montant moyen payé pour obtenir une conversion. Formule : Dépenses ÷ Conversions." },
+  "cpv": { title: "CPV (Cost Per View)", desc: "Coût par vue complète d'une vidéo. Formule : Dépenses ÷ Vues complètes." },
+  "cpl": { title: "CPL (Cost Per Listen)", desc: "Coût par écoute complète d'un format audio." },
+  "vcr": { title: "VCR (Video Completion Rate)", desc: "Taux de complétion vidéo : pourcentage de vues ayant été regardées jusqu'au bout (Q100)." },
+  "ltr": { title: "LTR (Listen-Through Rate)", desc: "Taux d'écoute complète d'un format audio (jusqu'à la fin du spot)." },
+  "depenses": { title: "Dépenses", desc: "Budget effectivement consommé sur la période, exprimé en euros nets média." },
+  "dep.": { title: "Dépenses", desc: "Budget effectivement consommé sur la période." },
+  "budget": { title: "Budget", desc: "Enveloppe totale allouée à la campagne ou au canal." },
+  "reach": { title: "Reach", desc: "Nombre d'utilisateurs uniques exposés à la publicité (déduplication des impressions)." },
+  "reach unique": { title: "Reach unique", desc: "Nombre d'utilisateurs uniques exposés à la publicité (déduplication des impressions)." },
+  "frequence": { title: "Fréquence", desc: "Nombre moyen de fois où chaque utilisateur unique a vu la publicité. Formule : Impressions ÷ Reach." },
+  "pacing": { title: "Pacing", desc: "Rythme de consommation du budget. 100% = dépense alignée sur le planning. <100% = sous-diffusé, >100% = sur-diffusé." },
+  "conversions": { title: "Conversions", desc: "Nombre d'actions souhaitées réalisées après exposition à la publicité (achat, inscription, téléchargement…)." },
+  "conv.": { title: "Conversions", desc: "Nombre d'actions souhaitées réalisées après exposition à la publicité." },
+  "taux conv.": { title: "Taux de conversion", desc: "Pourcentage de clics ayant généré une conversion. Formule : Conversions ÷ Clics × 100." },
+  "q25": { title: "Quartile 25 % (Q25)", desc: "Part des impressions vidéo où l'utilisateur a regardé au moins 25 % de la durée." },
+  "q50": { title: "Quartile 50 % (Q50)", desc: "Part des impressions vidéo où l'utilisateur a regardé au moins 50 % de la durée." },
+  "q75": { title: "Quartile 75 % (Q75)", desc: "Part des impressions vidéo où l'utilisateur a regardé au moins 75 % de la durée." },
+  "q100": { title: "Quartile 100 % (Q100)", desc: "Part des impressions vidéo regardées jusqu'à la fin (équivalent au VCR)." },
+  "cpm moyen": { title: "CPM moyen", desc: "Coût pour 1 000 impressions, moyen sur la période. Formule : Dépenses ÷ Impressions × 1 000." },
+  "cpc moyen": { title: "CPC moyen", desc: "Coût par clic moyen sur la période. Formule : Dépenses ÷ Clics." },
+  "budget total": { title: "Budget total", desc: "Enveloppe totale allouée à la campagne, toutes cibles et canaux confondus." },
+  "part des clics": { title: "Part des clics", desc: "Pourcentage des clics totaux capté par un format, une taille ou un canal." },
+};
+const getMetricInfo = (label) => METRIC_INFO[String(label).toLowerCase().trim()];
+
+// =====================================================================
 // DATA GENERATOR (demo mode)
 // =====================================================================
 function generateDemoData() {
@@ -304,6 +348,7 @@ export default function ProgrammaticDashboard() {
   const [lexiqueSearch, setLexiqueSearch] = useState("");
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [dataSubTab, setDataSubTab] = useState("campaigns");
+  const [openMetric, setOpenMetric] = useState(null);
 
   const fileInputRef = useRef(null);
   const campaignFileRef = useRef(null);
@@ -698,6 +743,25 @@ export default function ProgrammaticDashboard() {
     importPanel: { position: "absolute", top: "100%", right: 0, background: NURU.card, border: `1px solid ${NURU.cardBorder}`, borderRadius: 10, padding: "16px 20px", minWidth: 320, zIndex: 60, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" },
   };
 
+  // Bouton "?" cliquable à placer à côté d'un label technique.
+  // Rend null si le label n'a pas de définition enregistrée dans METRIC_INFO.
+  const InfoBtn = ({ label }) => {
+    const info = getMetricInfo(label);
+    if (!info) return null;
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => { e.stopPropagation(); setOpenMetric(String(label).toLowerCase().trim()); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setOpenMetric(String(label).toLowerCase().trim()); } }}
+        title={`Définition : ${info.title}`}
+        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 13, height: 13, borderRadius: "50%", border: `1px solid ${NURU.gold}`, color: NURU.gold, fontSize: 9, fontWeight: 700, marginLeft: 5, cursor: "pointer", userSelect: "none", background: "transparent", lineHeight: 1, verticalAlign: "middle" }}
+      >?</span>
+    );
+  };
+  // Helper: rendu d'une cellule <th> enrichie d'un "?" si la colonne a une définition.
+  const thInfo = (h) => (<th key={h} style={S.th}>{h}<InfoBtn label={h} /></th>);
+
   const tooltipStyle = { background: NURU.card, border: `1px solid ${NURU.cardBorder}`, borderRadius: 8, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)" };
   const CT = ({ active, payload, label }) => { if (!active || !payload?.length) return null; return (<div style={tooltipStyle}><p style={{ fontWeight: 700, fontSize: 11, marginBottom: 3, color: NURU.text }}>{label}</p>{payload.map((p, i) => (<p key={i} style={{ fontSize: 10, color: p.color || NURU.gold, margin: "1px 0" }}>{p.name}: <strong>{typeof p.value === "number" ? p.value.toLocaleString("fr-FR") : p.value}</strong></p>))}</div>); };
 
@@ -707,14 +771,27 @@ export default function ProgrammaticDashboard() {
 
   // Tab definitions
   const tabsDef = dataMode === "campaign"
-    ? [{ key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par creatif" }, { key: "roi", label: "Analyse ROI" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, { key: "table", label: "Donnees" }]
-    : [{ key: "overview", label: "Vue d'ensemble" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Analyse ROI" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Sites" }, { key: "table", label: "Donnees" }];
+    ? [{ key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Couts" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, { key: "table", label: "Donnees" }]
+    : [{ key: "overview", label: "Vue d'ensemble" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Couts" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Sites" }, { key: "table", label: "Donnees" }];
 
   // =====================================================================
   // RENDER
   // =====================================================================
   return (
     <div style={S.container}>
+      {/* METRIC INFO POPUP */}
+      {openMetric && METRIC_INFO[openMetric] && (
+        <div style={S.lexiqueOverlay} onClick={() => setOpenMetric(null)}>
+          <div style={{ ...S.lexiquePanel, maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: NURU.gold, textTransform: "uppercase", letterSpacing: "0.04em" }}>{METRIC_INFO[openMetric].title}</div>
+              <button onClick={() => setOpenMetric(null)} aria-label="Fermer" style={{ background: "transparent", border: "none", color: NURU.textMuted, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: NURU.text, lineHeight: 1.65 }}>{METRIC_INFO[openMetric].desc}</div>
+          </div>
+        </div>
+      )}
+
       {/* LEXIQUE MODAL */}
       {showLexique && (
         <div style={S.lexiqueOverlay} onClick={() => setShowLexique(false)}>
@@ -804,8 +881,8 @@ export default function ProgrammaticDashboard() {
         {/* ======= OVERVIEW ======= */}
         {activeTab === "overview" && dataMode === "demo" && (<>
           {(() => { const globalKpis = [{ label: "Impressions", value: fmtNum(kpis.impressions) }, { label: "Depenses", value: fmtCur(kpis.spend) }, { label: "Clics", value: fmtNum(kpis.clicks) }, { label: "CTR", value: fmtPct(kpis.ctr) }, { label: "CPM moyen", value: fmtDec(kpis.cpm) + " EUR" }, { label: "CPC moyen", value: fmtDec(kpis.cpc) + " EUR" }, { label: "Viewability", value: fmtPct(kpis.viewability) }, { label: "Conversions", value: fmtNum(kpis.conversions) }, { label: "VCR (video)", value: fmtPct(kpis.vcr) }, { label: "LTR (audio)", value: fmtPct(kpis.ltr) }]; return (<>
-            <div style={S.kpiRow}>{globalKpis.slice(0, 5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
-            <div style={S.kpiRow}>{globalKpis.slice(5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
+            <div style={S.kpiRow}>{globalKpis.slice(0, 5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
+            <div style={S.kpiRow}>{globalKpis.slice(5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
           </>); })()}
           <div style={S.grid}>
             <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Impressions et clics ({aggregation === "day" ? "jour" : aggregation === "week" ? "semaine" : "mois"})</div>
@@ -824,7 +901,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={700}><RadarChart data={radarData} cx="50%" cy="50%" outerRadius={260}><PolarGrid stroke={NURU.cardBorder} /><PolarAngleAxis dataKey="metric" stroke={NURU.textMuted} fontSize={12} /><PolarRadiusAxis stroke={NURU.cardBorder} fontSize={9} />{formatBreakdown.map((f, i) => (<Radar key={f.format} name={f.format} dataKey={f.format} stroke={RADAR_PALETTE[i % RADAR_PALETTE.length]} fill={RADAR_PALETTE[i % RADAR_PALETTE.length] + "30"} strokeWidth={3} dot={{ r: 4, fill: RADAR_PALETTE[i % RADAR_PALETTE.length] }} />))}<Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} /><Tooltip /></RadarChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Comparaison detaillee par canal</div>
-              <table style={S.table}><thead><tr>{["Canal", "Impressions", "Depenses", "CPM", "Clics", "CTR", "CPC", "Viewability", "VCR", "LTR", "Conv."].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Canal", "Impressions", "Depenses", "CPM", "Clics", "CTR", "CPC", "Viewability", "VCR", "LTR", "Conv."].map(h => thInfo(h))}</tr></thead>
               <tbody>{formatBreakdown.map((f, i) => (<tr key={f.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{f.format}</span></td><td style={S.td}>{fmtNum(f.impressions)}</td><td style={S.td}>{fmtCur(f.spend)}</td><td style={S.td}>{f.cpm} EUR</td><td style={S.td}>{fmtNum(f.clicks)}</td><td style={S.td}>{f.ctr}%</td><td style={S.td}>{f.cpc} EUR</td><td style={S.td}>{f.viewability}%</td><td style={S.td}>{f.vcr > 0 ? f.vcr + "%" : "\u2014"}</td><td style={S.td}>{f.ltr > 0 ? f.ltr + "%" : "\u2014"}</td><td style={S.td}>{fmtNum(f.conversions)}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -837,10 +914,10 @@ export default function ProgrammaticDashboard() {
             <div style={{ fontSize: 11, color: NURU.textMuted }}>Periode : {campaignKpis.flightStart} au {campaignKpis.flightEnd} — Donnees agregees (pas de granularite quotidienne)</div>
           </div>
           <div style={S.kpiRow}>
-            {[{ label: "Budget total", value: fmtCur(campaignKpis.budget) }, { label: "Depenses", value: fmtCur(campaignKpis.spend) }, { label: "Pacing", value: fmtPct(campaignKpis.pacing) }, { label: "Impressions", value: fmtNum(campaignKpis.impressions) }, { label: "Clics", value: fmtNum(campaignKpis.clicks) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}
+            {[{ label: "Budget total", value: fmtCur(campaignKpis.budget) }, { label: "Depenses", value: fmtCur(campaignKpis.spend) }, { label: "Pacing", value: fmtPct(campaignKpis.pacing) }, { label: "Impressions", value: fmtNum(campaignKpis.impressions) }, { label: "Clics", value: fmtNum(campaignKpis.clicks) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}
           </div>
           <div style={S.kpiRow}>
-            {[{ label: "CTR", value: fmtPct(campaignKpis.ctr) }, { label: "CPM moyen", value: fmtCurDec(campaignKpis.cpm) }, { label: "CPC moyen", value: fmtCurDec(campaignKpis.cpc) }, { label: "Viewability", value: fmtPct(campaignKpis.viewability) }, { label: "Reach unique", value: fmtNum(campaignKpis.uniqueImpressions) }, { label: "Frequence", value: fmtDec(campaignKpis.frequency) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}
+            {[{ label: "CTR", value: fmtPct(campaignKpis.ctr) }, { label: "CPM moyen", value: fmtCurDec(campaignKpis.cpm) }, { label: "CPC moyen", value: fmtCurDec(campaignKpis.cpc) }, { label: "Viewability", value: fmtPct(campaignKpis.viewability) }, { label: "Reach unique", value: fmtNum(campaignKpis.uniqueImpressions) }, { label: "Frequence", value: fmtDec(campaignKpis.frequency) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}
           </div>
           <div style={S.grid}>
             <div style={S.card}><div style={S.cardTitle}>Repartition budget par canal</div>
@@ -850,7 +927,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={280}><RadarChart data={campaignRadarData} cx="50%" cy="50%" outerRadius={100}><PolarGrid stroke={NURU.cardBorder} /><PolarAngleAxis dataKey="metric" stroke={NURU.textMuted} fontSize={10} /><PolarRadiusAxis stroke={NURU.cardBorder} fontSize={9} />{campaignFormatBreakdown.map((f, i) => (<Radar key={f.format} name={f.format} dataKey={f.format} stroke={RADAR_PALETTE[i % RADAR_PALETTE.length]} fill={RADAR_PALETTE[i % RADAR_PALETTE.length] + "30"} strokeWidth={2} dot={{ r: 3, fill: RADAR_PALETTE[i % RADAR_PALETTE.length] }} />))}<Legend wrapperStyle={{ fontSize: 10 }} /><Tooltip /></RadarChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Comparaison Display vs Native</div>
-              <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability", "Reach unique"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability", "Reach unique"].map(h => thInfo(h))}</tr></thead>
               <tbody>{campaignFormatBreakdown.map((f, i) => (<tr key={f.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{f.format}</span></td><td style={S.td}>{fmtCur(f.budget)}</td><td style={S.td}>{fmtCur(f.spend)}</td><td style={S.td}>{fmtNum(f.impressions)}</td><td style={S.td}>{fmtNum(f.clicks)}</td><td style={S.td}>{f.ctr}%</td><td style={S.td}>{f.cpm} EUR</td><td style={S.td}>{f.cpc} EUR</td><td style={S.td}>{f.viewability}%</td><td style={S.td}>{fmtNum(f.uniqueImpressions)}</td></tr>))}</tbody></table>
             </div>
             <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Top 20 domaines par depenses</div>
@@ -866,11 +943,11 @@ export default function ProgrammaticDashboard() {
             <div key={p.persona} style={{ marginBottom: 32 }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: NURU.gold, marginBottom: 12, borderBottom: `2px solid ${NURU.gold}`, paddingBottom: 8 }}>{p.persona}</div>
               <div style={S.kpiRow}>
-                {[{ label: "Budget", value: fmtCur(p.budget) }, { label: "Depenses", value: fmtCur(p.spend) }, { label: "Impressions", value: fmtNum(p.impressions) }, { label: "Clics", value: fmtNum(p.clicks) }, { label: "CTR", value: fmtPct(p.ctr) }, { label: "CPM", value: fmtCurDec(p.cpm) }, { label: "Reach unique", value: fmtNum(p.uniqueImpressions) }, { label: "Frequence", value: fmtDec(p.frequency) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}
+                {[{ label: "Budget", value: fmtCur(p.budget) }, { label: "Depenses", value: fmtCur(p.spend) }, { label: "Impressions", value: fmtNum(p.impressions) }, { label: "Clics", value: fmtNum(p.clicks) }, { label: "CTR", value: fmtPct(p.ctr) }, { label: "CPM", value: fmtCurDec(p.cpm) }, { label: "Reach unique", value: fmtNum(p.uniqueImpressions) }, { label: "Frequence", value: fmtDec(p.frequency) }].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}
               </div>
               {/* Channel comparison */}
               <div style={{ ...S.card, marginBottom: 14, overflowX: "auto" }}><div style={S.cardTitle}>Comparaison par canal</div>
-                <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "Viewability"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+                <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "Viewability"].map(h => thInfo(h))}</tr></thead>
                 <tbody>{Object.entries(p.channels).map(([ch, d], i) => (<tr key={ch} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{ch}</span></td><td style={S.td}>{fmtCur(d.budget)}</td><td style={S.td}>{fmtCur(d.spend)}</td><td style={S.td}>{fmtNum(d.impressions)}</td><td style={S.td}>{fmtNum(d.clicks)}</td><td style={S.td}>{d.impressions > 0 ? fmtPct((d.clicks / d.impressions) * 100) : "0%"}</td><td style={S.td}>{d.impressions > 0 ? fmtCurDec(d.spend / (d.impressions / 1000)) : "0"}</td><td style={S.td}>{d.viewPct > 0 ? fmtPct(d.viewPct) : "\u2014"}</td></tr>))}</tbody></table>
               </div>
               <div style={S.grid}>
@@ -882,7 +959,7 @@ export default function ProgrammaticDashboard() {
                 </div>
               </div>
               <div style={{ ...S.card, overflowX: "auto", marginBottom: 14 }}><div style={S.cardTitle}>Detail des creatifs</div>
-                <table style={S.table}><thead><tr>{["Creatif", "Taille", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+                <table style={S.table}><thead><tr>{["Creatif", "Taille", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => thInfo(h))}</tr></thead>
                 <tbody>{p.allCreatives.map((c, i) => (<tr key={c.creative + i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{c.creative}</td><td style={S.td}>{c.size}</td><td style={S.td}><span style={S.badge}>{c.channelType}</span></td><td style={S.td}>{fmtNum(c.impressions)}</td><td style={S.td}>{fmtNum(c.clicks)}</td><td style={S.td}>{c.ctr}%</td><td style={S.td}>{fmtCurDec(c.spend)}</td><td style={S.td}>{c.cpm} EUR</td><td style={S.td}>{c.cpc > 0 ? c.cpc + " EUR" : "\u2014"}</td></tr>))}</tbody></table>
               </div>
             </div>
@@ -893,15 +970,15 @@ export default function ProgrammaticDashboard() {
         {activeTab === "formats" && dataMode === "demo" && (<>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>{ALL_FORMATS.map(f => (<button key={f} style={S.formatTab(selectedFormatTab === f)} onClick={() => setSelectedFormatTab(f)}>{FORMAT_CONFIG[f].label}</button>))}</div>
           {FORMAT_CONFIG[selectedFormatTab] && (<div style={S.formatInfo}><div style={{ fontSize: 15, fontWeight: 800, color: NURU.gold, marginBottom: 4 }}>{FORMAT_CONFIG[selectedFormatTab].label}</div><div style={{ fontSize: 11, color: NURU.textMuted, marginBottom: 8 }}>{FORMAT_CONFIG[selectedFormatTab].description}</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{FORMAT_CONFIG[selectedFormatTab].subFormats.map(sf => (<span key={sf.name} style={S.badge}>{sf.name} ({sf.size})</span>))}</div></div>)}
-          <div style={S.kpiRow}>{getChannelKpis(selectedFormatTab).slice(0, 5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
-          {getChannelKpis(selectedFormatTab).length > 5 && <div style={S.kpiRow}>{getChannelKpis(selectedFormatTab).slice(5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}</div>}
+          <div style={S.kpiRow}>{getChannelKpis(selectedFormatTab).slice(0, 5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
+          {getChannelKpis(selectedFormatTab).length > 5 && <div style={S.kpiRow}>{getChannelKpis(selectedFormatTab).slice(5).map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}</div>}
           <div style={S.grid}>
             <div style={S.card}><div style={S.cardTitle}>Impressions par sous-format</div><ResponsiveContainer width="100%" height={Math.max(160, subFormatBreakdown.length * 40)}><BarChart data={subFormatBreakdown} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} tickFormatter={fmtNum} /><YAxis type="category" dataKey="subFormat" stroke={NURU.textMuted} fontSize={10} width={150} /><Tooltip content={<CT />} /><Bar dataKey="impressions" name="Impressions" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
             <div style={S.card}><div style={S.cardTitle}>CPM par sous-format (EUR)</div><ResponsiveContainer width="100%" height={Math.max(160, subFormatBreakdown.length * 40)}><BarChart data={subFormatBreakdown} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="subFormat" stroke={NURU.textMuted} fontSize={10} width={150} /><Tooltip content={<CT />} /><Bar dataKey="cpm" name="CPM EUR" fill={NURU.goldDark} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
             {quartileData && <div style={S.card}><div style={S.cardTitle}>Completion par quartile (%)</div><ResponsiveContainer width="100%" height={220}><BarChart data={quartileData}><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis dataKey="quartile" stroke={NURU.textMuted} fontSize={10} /><YAxis stroke={NURU.textMuted} fontSize={10} domain={[0, 100]} /><Tooltip content={<CT />} /><Bar dataKey="value" name="Completion %" fill={CHART_GOLD} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
             <div style={S.card}><div style={S.cardTitle}>CTR par sous-format (%)</div><ResponsiveContainer width="100%" height={220}><BarChart data={subFormatBreakdown.filter(s => s.ctr > 0).sort((a, b) => b.ctr - a.ctr)}><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis dataKey="subFormat" stroke={NURU.textMuted} fontSize={9} interval={0} angle={-20} textAnchor="end" height={50} /><YAxis stroke={NURU.textMuted} fontSize={10} /><Tooltip content={<CT />} /><Bar dataKey="ctr" name="CTR %" fill={NURU.goldLight} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Detail des sous-formats</div>
-              <table style={S.table}><thead><tr><th style={S.th}>Sous-format</th><th style={S.th}>Impressions</th><th style={S.th}>Depenses</th><th style={S.th}>CPM</th>{["Display", "Native", "Video", "Audio"].includes(selectedFormatTab) && <><th style={S.th}>Clics</th><th style={S.th}>CTR</th></>}{["Video", "CTV"].includes(selectedFormatTab) && <th style={S.th}>VCR</th>}{selectedFormatTab === "Audio" && <th style={S.th}>LTR</th>}<th style={S.th}>Viewability</th></tr></thead>
+              <table style={S.table}><thead><tr>{thInfo("Sous-format")}{thInfo("Impressions")}{thInfo("Depenses")}{thInfo("CPM")}{["Display", "Native", "Video", "Audio"].includes(selectedFormatTab) && <>{thInfo("Clics")}{thInfo("CTR")}</>}{["Video", "CTV"].includes(selectedFormatTab) && thInfo("VCR")}{selectedFormatTab === "Audio" && thInfo("LTR")}{thInfo("Viewability")}</tr></thead>
               <tbody>{subFormatBreakdown.map((sf, i) => (<tr key={sf.subFormat} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{sf.subFormat}</td><td style={S.td}>{fmtNum(sf.impressions)}</td><td style={S.td}>{fmtCur(sf.spend)}</td><td style={S.td}>{sf.cpm} EUR</td>{["Display", "Native", "Video", "Audio"].includes(selectedFormatTab) && <><td style={S.td}>{fmtNum(sf.clicks)}</td><td style={S.td}>{sf.ctr}%</td></>}{["Video", "CTV"].includes(selectedFormatTab) && <td style={S.td}>{sf.vcr > 0 ? sf.vcr + "%" : "\u2014"}</td>}{selectedFormatTab === "Audio" && <td style={S.td}>{sf.ltr > 0 ? sf.ltr + "%" : "\u2014"}</td>}<td style={S.td}>{sf.viewability > 0 ? sf.viewability + "%" : "\u2014"}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -919,7 +996,7 @@ export default function ProgrammaticDashboard() {
             chCreatives.forEach(r => { if (!sizeMap[r.creativeSize]) sizeMap[r.creativeSize] = { subFormat: r.creativeSize, impressions: 0, clicks: 0, spend: 0 }; sizeMap[r.creativeSize].impressions += r.impressions; sizeMap[r.creativeSize].clicks += r.clicks; sizeMap[r.creativeSize].spend += r.mediaCost; });
             const sizeBreakdown = Object.values(sizeMap).map(d => ({ ...d, ctr: d.impressions > 0 ? +((d.clicks / d.impressions) * 100).toFixed(2) : 0, cpm: d.impressions > 0 ? +(d.spend / (d.impressions / 1000)).toFixed(2) : 0 })).sort((a, b) => b.impressions - a.impressions);
             return (<>
-              <div style={S.kpiRow}>{chKpis.map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}</div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
+              <div style={S.kpiRow}>{chKpis.map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={S.kpiValue}>{k.value}</div></div>))}</div>
               <div style={S.grid}>
                 <div style={S.card}><div style={S.cardTitle}>Impressions par taille</div>
                   <ResponsiveContainer width="100%" height={Math.max(160, sizeBreakdown.length * 40)}><BarChart data={sizeBreakdown} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} tickFormatter={fmtNum} /><YAxis type="category" dataKey="subFormat" stroke={NURU.textMuted} fontSize={10} width={100} /><Tooltip content={<CT />} /><Bar dataKey="impressions" name="Impressions" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
@@ -928,7 +1005,7 @@ export default function ProgrammaticDashboard() {
                   <ResponsiveContainer width="100%" height={Math.max(160, sizeBreakdown.filter(s => s.ctr > 0).length * 40)}><BarChart data={sizeBreakdown.filter(s => s.ctr > 0).sort((a, b) => b.ctr - a.ctr)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="subFormat" stroke={NURU.textMuted} fontSize={10} width={100} /><Tooltip content={<CT />} /><Bar dataKey="ctr" name="CTR %" fill={NURU.goldLight} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
                 </div>
                 <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Detail par taille</div>
-                  <table style={S.table}><thead><tr>{["Taille", "Impressions", "Clics", "CTR", "Depenses", "CPM"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+                  <table style={S.table}><thead><tr>{["Taille", "Impressions", "Clics", "CTR", "Depenses", "CPM"].map(h => thInfo(h))}</tr></thead>
                   <tbody>{sizeBreakdown.map((sf, i) => (<tr key={sf.subFormat} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{sf.subFormat}</td><td style={S.td}>{fmtNum(sf.impressions)}</td><td style={S.td}>{fmtNum(sf.clicks)}</td><td style={S.td}>{sf.ctr}%</td><td style={S.td}>{fmtCurDec(sf.spend)}</td><td style={S.td}>{sf.cpm} EUR</td></tr>))}</tbody></table>
                 </div>
               </div>
@@ -950,7 +1027,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={280}><PieChart><Pie data={creativeAxisData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="impressions" nameKey="creative" label={({ creative, percent }) => percent > 0.05 ? `${creative} ${(percent * 100).toFixed(0)}%` : ""} labelLine={false} fontSize={10}>{creativeAxisData.map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}</Pie><Tooltip content={<CT />} /></PieChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par axe creatif</div>
-              <table style={S.table}><thead><tr>{["Axe creatif", "Formats actifs", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC", "Viewability", "VCR", "Conv."].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Axe creatif", "Formats actifs", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC", "Viewability", "VCR", "Conv."].map(h => thInfo(h))}</tr></thead>
               <tbody>{creativeAxisData.map((c, i) => (<tr key={c.creative} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{c.creative}</td><td style={S.td}><span style={{ fontSize: 10, color: NURU.textMuted }}>{c.formats}</span></td><td style={S.td}>{fmtNum(c.impressions)}</td><td style={S.td}>{fmtNum(c.clicks)}</td><td style={S.td}>{c.ctr}%</td><td style={S.td}>{fmtCur(c.spend)}</td><td style={S.td}>{c.cpm} EUR</td><td style={S.td}>{c.cpc > 0 ? c.cpc + " EUR" : "\u2014"}</td><td style={S.td}>{c.viewability > 0 ? c.viewability + "%" : "\u2014"}</td><td style={S.td}>{c.vcr > 0 ? c.vcr + "%" : "\u2014"}</td><td style={S.td}>{fmtNum(c.conversions)}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -958,19 +1035,19 @@ export default function ProgrammaticDashboard() {
 
         {/* ======= CREATIVES (campaign) ======= */}
         {activeTab === "creatives" && dataMode === "campaign" && (<>
-          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse par creatif</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Performance de chaque annonce (creative) utilisee dans la campagne. Les creatifs sont classes par depenses.</div></div>
+          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse par axe creatif</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Performance de chaque annonce (creative) utilisee dans la campagne. Les creatifs sont classes par depenses.</div></div>
           <div style={S.grid}>
-            <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Depenses par creatif</div>
+            <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Depenses par axe creatif</div>
               <ResponsiveContainer width="100%" height={Math.max(300, creativePerformance.slice(0, 20).length * 28)}><BarChart data={creativePerformance.slice(0, 20)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="creative" stroke={NURU.textMuted} fontSize={8} width={200} /><Tooltip content={<CT />} /><Bar dataKey="spend" name="Depenses EUR" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
             </div>
-            <div style={S.card}><div style={S.cardTitle}>CTR par creatif (%)</div>
+            <div style={S.card}><div style={S.cardTitle}>CTR par axe creatif (%)</div>
               <ResponsiveContainer width="100%" height={Math.max(300, creativePerformance.filter(c => c.ctr > 0).slice(0, 15).length * 28)}><BarChart data={creativePerformance.filter(c => c.ctr > 0).sort((a, b) => b.ctr - a.ctr).slice(0, 15)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="creative" stroke={NURU.textMuted} fontSize={8} width={200} /><Tooltip content={<CT />} /><Bar dataKey="ctr" name="CTR %" fill={NURU.goldDark} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
             </div>
             <div style={S.card}><div style={S.cardTitle}>Repartition impressions</div>
               <ResponsiveContainer width="100%" height={280}><PieChart><Pie data={creativePerformance.slice(0, 10)} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="impressions" nameKey="creative" label={({ creative, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ""} labelLine={false} fontSize={9}>{creativePerformance.slice(0, 10).map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}</Pie><Tooltip content={<CT />} /><Legend wrapperStyle={{ fontSize: 9 }} /></PieChart></ResponsiveContainer>
             </div>
-            <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par creatif</div>
-              <table style={S.table}><thead><tr>{["Creatif", "Taille", "Canal", "Cibles", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par axe creatif</div>
+              <table style={S.table}><thead><tr>{["Creatif", "Taille", "Canal", "Cibles", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => thInfo(h))}</tr></thead>
               <tbody>{creativePerformance.map((c, i) => (<tr key={c.creative + i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{c.creative}</td><td style={S.td}>{c.size}</td><td style={S.td}><span style={S.badge}>{c.channelType}</span></td><td style={{ ...S.td, fontSize: 10, color: NURU.textMuted }}>{c.personas}</td><td style={S.td}>{fmtNum(c.impressions)}</td><td style={S.td}>{fmtNum(c.clicks)}</td><td style={S.td}>{c.ctr}%</td><td style={S.td}>{fmtCurDec(c.spend)}</td><td style={S.td}>{c.cpm} EUR</td><td style={S.td}>{c.cpc > 0 ? c.cpc + " EUR" : "\u2014"}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -978,7 +1055,7 @@ export default function ProgrammaticDashboard() {
 
         {/* ======= ROI (demo) ======= */}
         {activeTab === "roi" && dataMode === "demo" && (<>
-          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse ROI</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Efficacite du budget : rapport entre les couts (CPM, CPC, CPA) et les resultats (CTR, conversions).</div></div>
+          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse des couts</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Efficacite du budget : rapport entre les couts (CPM, CPC, CPA) et les resultats (CTR, conversions).</div></div>
           <div style={S.grid}>
             <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Evolution CPM et CTR</div>
               <ResponsiveContainer width="100%" height={300}><ComposedChart data={roiTimeSeries}><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis dataKey="label" stroke={NURU.textMuted} fontSize={10} tickLine={false} /><YAxis yAxisId="l" stroke={NURU.textMuted} fontSize={10} /><YAxis yAxisId="r" orientation="right" stroke={NURU.textMuted} fontSize={10} /><Tooltip content={<CT />} /><Legend wrapperStyle={{ fontSize: 10 }} /><Area yAxisId="l" type="monotone" dataKey="cpmTrend" name="CPM EUR" fill={CHART_GOLD_FILL} stroke={CHART_GOLD} strokeWidth={2} /><Line yAxisId="r" type="monotone" dataKey="ctrTrend" name="CTR %" stroke={NURU.goldLight} strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer>
@@ -990,7 +1067,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={280}><BarChart data={roiData.filter(r => r.ctr > 0).sort((a, b) => b.ctr - a.ctr)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="format" stroke={NURU.textMuted} fontSize={11} width={100} /><Tooltip content={<CT />} /><Bar dataKey="ctr" name="CTR %" fill={NURU.goldDark} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Tableau ROI par canal</div>
-              <table style={S.table}><thead><tr>{["Canal", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Conversions", "CPA", "Taux conv."].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Canal", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Conversions", "CPA", "Taux conv."].map(h => thInfo(h))}</tr></thead>
               <tbody>{roiData.map((r, i) => (<tr key={r.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{r.format}</span></td><td style={S.td}>{fmtCur(r.spend)}</td><td style={S.td}>{fmtNum(formatBreakdown.find(f => f.format === r.format)?.impressions || 0)}</td><td style={S.td}>{fmtNum(formatBreakdown.find(f => f.format === r.format)?.clicks || 0)}</td><td style={S.td}>{r.ctr}%</td><td style={S.td}>{r.cpm} EUR</td><td style={S.td}>{r.cpc > 0 ? r.cpc + " EUR" : "\u2014"}</td><td style={S.td}>{fmtNum(formatBreakdown.find(f => f.format === r.format)?.conversions || 0)}</td><td style={S.td}>{r.cpa > 0 ? r.cpa + " EUR" : "\u2014"}</td><td style={S.td}>{r.convRate > 0 ? r.convRate + "%" : "\u2014"}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -998,7 +1075,7 @@ export default function ProgrammaticDashboard() {
 
         {/* ======= ROI (campaign) ======= */}
         {activeTab === "roi" && dataMode === "campaign" && (<>
-          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse ROI</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Comparaison de l&apos;efficacite entre Display et Native.</div></div>
+          <div style={{ ...S.formatInfo, marginBottom: 16 }}><div style={{ fontSize: 13, fontWeight: 700, color: NURU.gold, marginBottom: 4 }}>Analyse des couts</div><div style={{ fontSize: 11, color: NURU.textMuted }}>Comparaison de l&apos;efficacite entre Display et Native.</div></div>
           <div style={S.grid}>
             <div style={S.card}><div style={S.cardTitle}>CPM par canal (EUR)</div>
               <ResponsiveContainer width="100%" height={200}><BarChart data={campaignFormatBreakdown}><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis dataKey="format" stroke={NURU.textMuted} fontSize={11} /><YAxis stroke={NURU.textMuted} fontSize={10} /><Tooltip content={<CT />} /><Bar dataKey="cpm" name="CPM EUR" fill={CHART_GOLD} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
@@ -1013,7 +1090,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={200}><PieChart><Pie data={campaignFormatBreakdown} cx="50%" cy="50%" innerRadius={40} outerRadius={80} paddingAngle={3} dataKey="spend" nameKey="format" label={({ format, percent }) => `${format} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>{campaignFormatBreakdown.map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}</Pie><Tooltip content={<CT />} /></PieChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Tableau ROI</div>
-              <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Canal", "Budget", "Depenses", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability"].map(h => thInfo(h))}</tr></thead>
               <tbody>{campaignFormatBreakdown.map((f, i) => (<tr key={f.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{f.format}</span></td><td style={S.td}>{fmtCur(f.budget)}</td><td style={S.td}>{fmtCur(f.spend)}</td><td style={S.td}>{fmtNum(f.impressions)}</td><td style={S.td}>{fmtNum(f.clicks)}</td><td style={S.td}>{f.ctr}%</td><td style={S.td}>{f.cpm} EUR</td><td style={S.td}>{f.cpc > 0 ? f.cpc + " EUR" : "\u2014"}</td><td style={S.td}>{f.viewability}%</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -1033,7 +1110,7 @@ export default function ProgrammaticDashboard() {
               <ResponsiveContainer width="100%" height={Math.max(200, visibilityData.filter(v => v.vcr > 0 || v.ltr > 0).length * 40 || 200)}><BarChart data={visibilityData.filter(v => v.vcr > 0 || v.ltr > 0)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} domain={[0, 100]} /><YAxis type="category" dataKey="format" stroke={NURU.textMuted} fontSize={11} width={100} /><Tooltip content={<CT />} /><Legend wrapperStyle={{ fontSize: 10 }} /><Bar dataKey="vcr" name="VCR %" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /><Bar dataKey="ltr" name="LTR %" fill={NURU.goldDark} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
             </div>
             <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Tableau visibilite par canal</div>
-              <table style={S.table}><thead><tr>{["Canal", "Impressions totales", "Impressions visibles", "Viewability", "VCR", "LTR"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <table style={S.table}><thead><tr>{["Canal", "Impressions totales", "Impressions visibles", "Viewability", "VCR", "LTR"].map(h => thInfo(h))}</tr></thead>
               <tbody>{visibilityData.map((v, i) => (<tr key={v.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{v.format}</span></td><td style={S.td}>{fmtNum(v.impressions)}</td><td style={S.td}>{fmtNum(v.visibleImpressions)}</td><td style={S.td}>{v.viewability > 0 ? v.viewability + "%" : "\u2014"}</td><td style={S.td}>{v.vcr > 0 ? v.vcr + "%" : "\u2014"}</td><td style={S.td}>{v.ltr > 0 ? v.ltr + "%" : "\u2014"}</td></tr>))}</tbody></table>
             </div>
           </div>
@@ -1053,7 +1130,7 @@ export default function ProgrammaticDashboard() {
                   <ResponsiveContainer width="100%" height={Math.max(160, visData.length * 40)}><BarChart data={visData} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} tickFormatter={fmtNum} /><YAxis type="category" dataKey="format" stroke={NURU.textMuted} fontSize={9} width={220} /><Tooltip content={<CT />} /><Legend wrapperStyle={{ fontSize: 10 }} /><Bar dataKey="impressionsMeasurable" name="Mesurables" fill={NURU.goldDark + "88"} radius={[0, 4, 4, 0]} /><Bar dataKey="impressionsViewed" name="Vues" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>
                 </div>
                 <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Detail visibilite</div>
-                  <table style={S.table}><thead><tr>{["Campagne", "Impressions", "Mesurables", "Vues", "Viewability", "Taux mesure"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+                  <table style={S.table}><thead><tr>{["Campagne", "Impressions", "Mesurables", "Vues", "Viewability", "Taux mesure"].map(h => thInfo(h))}</tr></thead>
                   <tbody>{visData.map((v, i) => (<tr key={v.format} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{v.format}</td><td style={S.td}>{fmtNum(v.impressions)}</td><td style={S.td}>{fmtNum(v.impressionsMeasurable)}</td><td style={S.td}>{fmtNum(v.impressionsViewed)}</td><td style={S.td}>{v.viewability > 0 ? fmtPct(v.viewability) : "\u2014"}</td><td style={S.td}>{v.visibleRate > 0 ? v.visibleRate + "%" : "\u2014"}</td></tr>))}</tbody></table>
                 </div>
               </div>
@@ -1066,7 +1143,7 @@ export default function ProgrammaticDashboard() {
           <div style={{ ...S.card, ...S.cardFull }}><div style={S.cardTitle}>Depenses par site (EUR)</div><ResponsiveContainer width="100%" height={Math.max(280, sitePerformance.length * 34)}><BarChart data={sitePerformance} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="site" stroke={NURU.textMuted} fontSize={11} width={110} /><Tooltip content={<CT />} /><Bar dataKey="spend" name="Depenses EUR" fill={CHART_GOLD} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
           <div style={S.card}><div style={S.cardTitle}>CTR par site (%)</div><ResponsiveContainer width="100%" height={Math.max(260, sitePerformance.filter(s => s.ctr > 0).length * 34)}><BarChart data={sitePerformance.filter(s => s.ctr > 0).sort((a, b) => b.ctr - a.ctr)} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke={NURU.cardBorder} /><XAxis type="number" stroke={NURU.textMuted} fontSize={10} /><YAxis type="category" dataKey="site" stroke={NURU.textMuted} fontSize={11} width={110} /><Tooltip content={<CT />} /><Bar dataKey="ctr" name="CTR %" fill={NURU.goldDark} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
           <div style={S.card}><div style={S.cardTitle}>Repartition devices</div><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={deviceBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={4} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>{deviceBreakdown.map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}</Pie><Tooltip content={<CT />} /></PieChart></ResponsiveContainer></div>
-          <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par site</div><table style={S.table}><thead><tr>{["Site", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPA", "Conv."].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead><tbody>{sitePerformance.map((s, i) => (<tr key={s.site} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{s.site}</td><td style={S.td}>{fmtNum(s.impressions)}</td><td style={S.td}>{fmtNum(s.clicks)}</td><td style={S.td}>{s.ctr}%</td><td style={S.td}>{fmtCur(s.spend)}</td><td style={S.td}>{s.cpm} EUR</td><td style={S.td}>{s.cpa > 0 ? s.cpa + " EUR" : "\u2014"}</td><td style={S.td}>{fmtNum(s.conversions)}</td></tr>))}</tbody></table></div>
+          <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par site</div><table style={S.table}><thead><tr>{["Site", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPA", "Conv."].map(h => thInfo(h))}</tr></thead><tbody>{sitePerformance.map((s, i) => (<tr key={s.site} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{s.site}</td><td style={S.td}>{fmtNum(s.impressions)}</td><td style={S.td}>{fmtNum(s.clicks)}</td><td style={S.td}>{s.ctr}%</td><td style={S.td}>{fmtCur(s.spend)}</td><td style={S.td}>{s.cpm} EUR</td><td style={S.td}>{s.cpa > 0 ? s.cpa + " EUR" : "\u2014"}</td><td style={S.td}>{fmtNum(s.conversions)}</td></tr>))}</tbody></table></div>
         </div>)}
 
         {/* ======= DOMAINES (campaign) ======= */}
@@ -1081,7 +1158,7 @@ export default function ProgrammaticDashboard() {
             <ResponsiveContainer width="100%" height={260}><PieChart><Pie data={domainPerformanceReal.slice(0, 10)} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="impressions" nameKey="site" label={({ percent }) => percent > 0.03 ? `${(percent * 100).toFixed(0)}%` : ""} labelLine={false} fontSize={9}>{domainPerformanceReal.slice(0, 10).map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}</Pie><Tooltip content={<CT />} /><Legend wrapperStyle={{ fontSize: 9 }} /></PieChart></ResponsiveContainer>
           </div>
           <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Performance par domaine ({domainPerformanceReal.length} domaines)</div>
-            <table style={S.table}><thead><tr>{["Domaine", "Impressions", "Clics", "CTR", "Depenses", "CPM"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <table style={S.table}><thead><tr>{["Domaine", "Impressions", "Clics", "CTR", "Depenses", "CPM"].map(h => thInfo(h))}</tr></thead>
             <tbody>{domainPerformanceReal.slice(0, 100).map((s, i) => (<tr key={s.site} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{s.site}</td><td style={S.td}>{fmtNum(s.impressions)}</td><td style={S.td}>{fmtNum(s.clicks)}</td><td style={S.td}>{s.ctr}%</td><td style={S.td}>{fmtCurDec(s.spend)}</td><td style={S.td}>{s.cpm} EUR</td></tr>))}</tbody></table>
             {domainPerformanceReal.length > 100 && <p style={{ padding: 12, color: NURU.textMuted, fontSize: 11, textAlign: "center" }}>100 premiers sur {domainPerformanceReal.length}</p>}
           </div>
@@ -1089,7 +1166,7 @@ export default function ProgrammaticDashboard() {
 
         {/* ======= TABLE (demo) ======= */}
         {activeTab === "table" && dataMode === "demo" && (<div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Donnees brutes ({filteredData.length.toLocaleString("fr-FR")} lignes)</div>
-          <table style={S.table}><thead><tr>{["Date", "Canal", "Sous-format", "Axe creatif", "Device", "Site", "Impr.", "Clics", "CTR", "CPM", "Dep.", "Viewab.", "VCR", "LTR", "Conv."].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+          <table style={S.table}><thead><tr>{["Date", "Canal", "Sous-format", "Axe creatif", "Device", "Site", "Impr.", "Clics", "CTR", "CPM", "Dep.", "Viewab.", "VCR", "LTR", "Conv."].map(h => thInfo(h))}</tr></thead>
           <tbody>{filteredData.slice(0, 150).map((r, i) => (<tr key={i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}>{r.date}</td><td style={S.td}><span style={S.badge}>{r.format}</span></td><td style={{ ...S.td, fontSize: 10 }}>{r.subFormat}</td><td style={{ ...S.td, fontSize: 10 }}>{r.creative || "\u2014"}</td><td style={S.td}>{r.device}</td><td style={S.td}>{r.site}</td><td style={S.td}>{(r.impressions || 0).toLocaleString("fr-FR")}</td><td style={S.td}>{(r.clicks || 0).toLocaleString("fr-FR")}</td><td style={S.td}>{fmtPct(r.ctr || 0)}</td><td style={S.td}>{fmtDec(r.cpm || 0)}</td><td style={S.td}>{fmtDec(r.spend || 0)}</td><td style={S.td}>{r.viewability > 0 ? r.viewability + "%" : "\u2014"}</td><td style={S.td}>{r.vcr > 0 ? r.vcr + "%" : "\u2014"}</td><td style={S.td}>{r.ltr > 0 ? r.ltr + "%" : "\u2014"}</td><td style={S.td}>{r.conversions || 0}</td></tr>))}</tbody></table>
           {filteredData.length > 150 && <p style={{ padding: 12, color: NURU.textMuted, fontSize: 11, textAlign: "center" }}>150 premieres lignes sur {filteredData.length.toLocaleString("fr-FR")}</p>}
         </div>)}
@@ -1100,16 +1177,16 @@ export default function ProgrammaticDashboard() {
             {[{ key: "campaigns", label: "Campagnes" }, { key: "domains", label: "Domaines" }, { key: "creatives", label: "Creatifs" }].map(t => (<button key={t.key} style={S.formatTab(dataSubTab === t.key)} onClick={() => setDataSubTab(t.key)}>{t.label}</button>))}
           </div>
           {dataSubTab === "campaigns" && (<div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Donnees campagnes ({filteredCampaignData.length} lignes)</div>
-            <table style={S.table}><thead><tr>{["Campagne", "Cible", "Canal", "Budget", "Depenses", "Pacing", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability", "Reach", "Frequence"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <table style={S.table}><thead><tr>{["Campagne", "Cible", "Canal", "Budget", "Depenses", "Pacing", "Impressions", "Clics", "CTR", "CPM", "CPC", "Viewability", "Reach", "Frequence"].map(h => thInfo(h))}</tr></thead>
             <tbody>{filteredCampaignData.map((r, i) => (<tr key={i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontSize: 10, fontWeight: 600 }}>{r.campaignName}</td><td style={{ ...S.td, fontSize: 10 }}>{r.persona}</td><td style={S.td}><span style={S.badge}>{r.channelType}</span></td><td style={S.td}>{fmtCur(r.lifetimeBudget)}</td><td style={S.td}>{fmtCurDec(r.mediaCost)}</td><td style={S.td}>{r.overallPacing}</td><td style={S.td}>{fmtNum(r.impressions)}</td><td style={S.td}>{fmtNum(r.clicks)}</td><td style={S.td}>{fmtPct(r.ctr)}</td><td style={S.td}>{fmtCurDec(r.eCPM)}</td><td style={S.td}>{fmtCurDec(r.eCPC)}</td><td style={S.td}>{fmtPct(r.viewPct)}</td><td style={S.td}>{fmtNum(r.uniqueImpressions)}</td><td style={S.td}>{fmtDec(r.frequency)}</td></tr>))}</tbody></table>
           </div>)}
           {dataSubTab === "domains" && (<div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Donnees domaines ({filteredDomainData.length} lignes)</div>
-            <table style={S.table}><thead><tr>{["Domaine", "Campagne", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <table style={S.table}><thead><tr>{["Domaine", "Campagne", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => thInfo(h))}</tr></thead>
             <tbody>{filteredDomainData.slice(0, 200).map((r, i) => (<tr key={i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{r.domain}</td><td style={{ ...S.td, fontSize: 10 }}>{r.persona}</td><td style={S.td}><span style={S.badge}>{r.channelType}</span></td><td style={S.td}>{fmtNum(r.impressions)}</td><td style={S.td}>{fmtNum(r.clicks)}</td><td style={S.td}>{fmtPct(r.ctr)}</td><td style={S.td}>{fmtCurDec(r.mediaCost)}</td><td style={S.td}>{fmtCurDec(r.eCPM)}</td><td style={S.td}>{r.eCPC > 0 ? fmtCurDec(r.eCPC) : "\u2014"}</td></tr>))}</tbody></table>
             {filteredDomainData.length > 200 && <p style={{ padding: 12, color: NURU.textMuted, fontSize: 11, textAlign: "center" }}>200 premieres lignes sur {filteredDomainData.length}</p>}
           </div>)}
           {dataSubTab === "creatives" && (<div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Donnees creatifs ({filteredCreativeData.length} lignes)</div>
-            <table style={S.table}><thead><tr>{["Creatif", "Taille", "Campagne", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <table style={S.table}><thead><tr>{["Creatif", "Taille", "Campagne", "Canal", "Impressions", "Clics", "CTR", "Depenses", "CPM", "CPC"].map(h => thInfo(h))}</tr></thead>
             <tbody>{filteredCreativeData.map((r, i) => (<tr key={i} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{r.creativeName}</td><td style={S.td}>{r.creativeSize}</td><td style={{ ...S.td, fontSize: 10 }}>{r.persona}</td><td style={S.td}><span style={S.badge}>{r.channelType}</span></td><td style={S.td}>{fmtNum(r.impressions)}</td><td style={S.td}>{fmtNum(r.clicks)}</td><td style={S.td}>{fmtPct(r.ctr)}</td><td style={S.td}>{fmtCurDec(r.mediaCost)}</td><td style={S.td}>{fmtCurDec(r.eCPM)}</td><td style={S.td}>{r.eCPC > 0 ? fmtCurDec(r.eCPC) : "\u2014"}</td></tr>))}</tbody></table>
           </div>)}
         </>)}
