@@ -203,6 +203,46 @@ function normalizeDomainRow(row) {
   };
 }
 
+// Matomo exports are usually UTF-16 LE with a BOM. Decode robustly.
+function decodeMatomoBuffer(buffer) {
+  const view = new Uint8Array(buffer);
+  if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) return new TextDecoder("utf-16le").decode(view.subarray(2));
+  if (view.length >= 2 && view[0] === 0xFE && view[1] === 0xFF) return new TextDecoder("utf-16be").decode(view.subarray(2));
+  if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) return new TextDecoder("utf-8").decode(view.subarray(3));
+  return new TextDecoder("utf-8").decode(view);
+}
+
+// Map utm_content slugs to the dashboard channel taxonomy.
+function detectMatomoChannel(content, fallback) {
+  const c = String(content || fallback || "").toLowerCase();
+  if (/native[_-]?ads?/.test(c)) return "Native";
+  if (/meta[_-]?fb|facebook/.test(c)) return "Meta FB";
+  if (/meta[_-]?ig|instagram/.test(c)) return "Meta IG";
+  if (/display/.test(c)) return "Display";
+  return "Autre";
+}
+
+function normalizeMatomoRow(row) {
+  // Matomo column names contain accented characters; we look up tolerant variants.
+  const get = (...keys) => { for (const k of keys) if (row[k] != null && row[k] !== "") return row[k]; return ""; };
+  const content = get("Mot-clé - Contenu", "Mot-cle - Contenu", "Mot-clé", "Mot-cle");
+  const name = get("Nom");
+  return {
+    rawName: name,
+    campaign: get("Nom de la campagne"),
+    content,
+    channel: detectMatomoChannel(content, name),
+    visits: parseEN(get("Visites")),
+    actions: parseEN(get("Actions")),
+    bounces: parseEN(get("Rebonds")),
+    timeSec: parseEN(get("Temps total passé par les visiteurs (en secondes)", "Temps total passe par les visiteurs (en secondes)")),
+    visitsWithConv: parseEN(get("Visites avec conversions")),
+    conversions: parseEN(get("Conversions")),
+    revenue: parseEN(get("Revenu")),
+    uniqueVisitors: parseEN(get("Visiteurs uniques (résumé quotidien)", "Visiteurs uniques (resume quotidien)")),
+  };
+}
+
 function normalizeCreativeRow(row) {
   const campaignName = row["Campaign"] || "";
   const { persona, channelType } = parseCampaignName(campaignName);
@@ -298,6 +338,7 @@ export default function ProgrammaticDashboard() {
   const [campaignData, setCampaignData] = useState([]);
   const [domainData, setDomainData] = useState([]);
   const [creativeRealData, setCreativeRealData] = useState([]);
+  const [matomoData, setMatomoData] = useState([]);
   const [dataMode, setDataMode] = useState("demo"); // "demo" | "campaign"
 
   // Filters
@@ -323,6 +364,7 @@ export default function ProgrammaticDashboard() {
   const campaignFileRef = useRef(null);
   const domainFileRef = useRef(null);
   const creativeFileRef = useRef(null);
+  const matomoFileRef = useRef(null);
 
   // =====================================================================
   // AUTO-LOAD: persisted import (localStorage) > embedded CSVs > demo
@@ -339,7 +381,8 @@ export default function ProgrammaticDashboard() {
           if (camp.length === 0) return false;
           const dom = stored.domain ? parseCsv(stored.domain).map(normalizeDomainRow).filter(r => r.domain) : [];
           const crea = stored.creative ? parseCsv(stored.creative).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
-          setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea);
+          const mato = stored.matomo ? parseCsv(stored.matomo).map(normalizeMatomoRow).filter(r => r.rawName) : [];
+          setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea); setMatomoData(mato);
           setDataMode("campaign"); setDataSource(stored.source || "Import campagne"); setRawData([]);
           return true;
         }
@@ -400,17 +443,20 @@ export default function ProgrammaticDashboard() {
     if (!campFile) return;
     const domFile = domainFileRef.current?.files?.[0];
     const creaFile = creativeFileRef.current?.files?.[0];
+    const matoFile = matomoFileRef.current?.files?.[0];
     const readText = (f) => f ? f.text() : Promise.resolve("");
-    const [campText, domText, creaText] = await Promise.all([readText(campFile), readText(domFile), readText(creaFile)]);
+    const readMatomo = (f) => f ? f.arrayBuffer().then(decodeMatomoBuffer) : Promise.resolve("");
+    const [campText, domText, creaText, matoText] = await Promise.all([readText(campFile), readText(domFile), readText(creaFile), readMatomo(matoFile)]);
     const parseCsv = (text) => Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data;
     const camp = parseCsv(campText).map(normalizeCampaignRow).filter(r => r.campaignName);
     const dom = domText ? parseCsv(domText).map(normalizeDomainRow).filter(r => r.domain) : [];
     const crea = creaText ? parseCsv(creaText).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
+    const mato = matoText ? parseCsv(matoText).map(normalizeMatomoRow).filter(r => r.rawName) : [];
     if (camp.length > 0) {
-      setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea);
+      setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea); setMatomoData(mato);
       setDataMode("campaign"); setDataSource("Import campagne"); setRawData([]);
       setShowImportPanel(false); setSelectedPersonas([]); setSelectedChannelTypes([]);
-      saveStoredData({ mode: "campaign", campaign: campText, domain: domText, creative: creaText, source: "Import campagne" });
+      saveStoredData({ mode: "campaign", campaign: campText, domain: domText, creative: creaText, matomo: matoText, source: "Import campagne" });
     }
   }, []);
 
@@ -710,6 +756,107 @@ export default function ProgrammaticDashboard() {
   const uniqueDomainsReal = useMemo(() => [...new Set(domainData.map(r => r.domain).filter(Boolean))].sort(), [domainData]);
 
   // =====================================================================
+  // MATOMO RECONCILIATION (Ads server vs Matomo)
+  // Always aggregated on the full dataset (filters don't apply here) so that
+  // Ads totals can be compared apples-to-apples with Matomo totals.
+  // =====================================================================
+  const matomoReconciliation = useMemo(() => {
+    if (!matomoData.length || !campaignData.length) return null;
+
+    // Aggregate Matomo by channel
+    const matoByChan = {};
+    matomoData.forEach(r => {
+      const k = r.channel || "Autre";
+      if (!matoByChan[k]) matoByChan[k] = { channel: k, visits: 0, actions: 0, bounces: 0, timeSec: 0, visitsWithConv: 0, conversions: 0, revenue: 0, uniqueVisitors: 0 };
+      const m = matoByChan[k];
+      m.visits += r.visits || 0; m.actions += r.actions || 0; m.bounces += r.bounces || 0; m.timeSec += r.timeSec || 0;
+      m.visitsWithConv += r.visitsWithConv || 0; m.conversions += r.conversions || 0; m.revenue += r.revenue || 0; m.uniqueVisitors += r.uniqueVisitors || 0;
+    });
+
+    // Aggregate Ads by channelType
+    const adsByChan = {};
+    campaignData.forEach(r => {
+      const k = r.channelType || "Autre";
+      if (!adsByChan[k]) adsByChan[k] = { channel: k, impressions: 0, clicks: 0, spend: 0, conversions: 0 };
+      const m = adsByChan[k];
+      m.impressions += r.impressions; m.clicks += r.clicks; m.spend += r.mediaCost; m.conversions += r.conversions;
+    });
+
+    // Comparable channels = those tracked on both sides (Display, Native typically)
+    const comparableKeys = Object.keys(adsByChan).filter(k => matoByChan[k]);
+    const comparable = comparableKeys.map(k => {
+      const ads = adsByChan[k];
+      const mato = matoByChan[k];
+      return {
+        channel: k,
+        impressions: ads.impressions,
+        clicks: ads.clicks,
+        spend: ads.spend,
+        adsConversions: ads.conversions,
+        visits: mato.visits,
+        visitsWithConv: mato.visitsWithConv,
+        matoConversions: mato.conversions,
+        revenue: mato.revenue,
+        bounces: mato.bounces,
+        timeSec: mato.timeSec,
+        actions: mato.actions,
+        arrivalRate: ads.clicks > 0 ? (mato.visits / ads.clicks) * 100 : 0,
+        bounceRate: mato.visits > 0 ? (mato.bounces / mato.visits) * 100 : 0,
+        avgTime: mato.visits > 0 ? mato.timeSec / mato.visits : 0,
+        actionsPerVisit: mato.visits > 0 ? mato.actions / mato.visits : 0,
+        realCpa: mato.conversions > 0 ? ads.spend / mato.conversions : 0,
+        roas: ads.spend > 0 ? (mato.revenue / ads.spend) * 100 : 0,
+        convDelta: ads.conversions > 0 ? ((mato.conversions - ads.conversions) / ads.conversions) * 100 : (mato.conversions > 0 ? 100 : 0),
+      };
+    }).sort((a, b) => b.spend - a.spend);
+
+    // Channels visible only in Matomo (no Ads data: Meta etc.)
+    const matomoOnly = Object.keys(matoByChan).filter(k => !adsByChan[k]).map(k => {
+      const m = matoByChan[k];
+      return {
+        channel: k,
+        visits: m.visits,
+        matoConversions: m.conversions,
+        revenue: m.revenue,
+        bounces: m.bounces,
+        timeSec: m.timeSec,
+        actions: m.actions,
+        bounceRate: m.visits > 0 ? (m.bounces / m.visits) * 100 : 0,
+        avgTime: m.visits > 0 ? m.timeSec / m.visits : 0,
+        actionsPerVisit: m.visits > 0 ? m.actions / m.visits : 0,
+      };
+    }).sort((a, b) => b.visits - a.visits);
+
+    // Totals
+    const totalCmp = comparable.reduce((acc, r) => ({
+      impressions: acc.impressions + r.impressions, clicks: acc.clicks + r.clicks, spend: acc.spend + r.spend,
+      adsConversions: acc.adsConversions + r.adsConversions, visits: acc.visits + r.visits,
+      matoConversions: acc.matoConversions + r.matoConversions, revenue: acc.revenue + r.revenue,
+      bounces: acc.bounces + r.bounces, timeSec: acc.timeSec + r.timeSec,
+    }), { impressions: 0, clicks: 0, spend: 0, adsConversions: 0, visits: 0, matoConversions: 0, revenue: 0, bounces: 0, timeSec: 0 });
+    const matoOnlyTotals = matomoOnly.reduce((acc, r) => ({ visits: acc.visits + r.visits, matoConversions: acc.matoConversions + r.matoConversions, revenue: acc.revenue + r.revenue }), { visits: 0, matoConversions: 0, revenue: 0 });
+
+    return {
+      comparable,
+      matomoOnly,
+      kpis: {
+        visitsAds: totalCmp.visits,
+        visitsAll: totalCmp.visits + matoOnlyTotals.visits,
+        arrivalRate: totalCmp.clicks > 0 ? (totalCmp.visits / totalCmp.clicks) * 100 : 0,
+        realCpa: totalCmp.matoConversions > 0 ? totalCmp.spend / totalCmp.matoConversions : 0,
+        cpaAds: totalCmp.adsConversions > 0 ? totalCmp.spend / totalCmp.adsConversions : 0,
+        roas: totalCmp.spend > 0 ? (totalCmp.revenue / totalCmp.spend) * 100 : 0,
+        bounceRate: totalCmp.visits > 0 ? (totalCmp.bounces / totalCmp.visits) * 100 : 0,
+        convDelta: totalCmp.adsConversions > 0 ? ((totalCmp.matoConversions - totalCmp.adsConversions) / totalCmp.adsConversions) * 100 : 0,
+        spend: totalCmp.spend,
+        revenue: totalCmp.revenue,
+        adsConversions: totalCmp.adsConversions,
+        matoConversions: totalCmp.matoConversions + matoOnlyTotals.matoConversions,
+      },
+    };
+  }, [matomoData, campaignData]);
+
+  // =====================================================================
   // STYLES
   // =====================================================================
   const S = {
@@ -752,7 +899,7 @@ export default function ProgrammaticDashboard() {
 
   // Tab definitions
   const tabsDef = dataMode === "campaign"
-    ? [{ key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par creatif" }, { key: "roi", label: "Analyse ROI" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, { key: "table", label: "Donnees" }]
+    ? [{ key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par creatif" }, { key: "roi", label: "Analyse ROI" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, ...(matomoData.length > 0 ? [{ key: "matomo", label: "Site & ROI (Matomo)" }] : []), { key: "table", label: "Donnees" }]
     : [{ key: "overview", label: "Vue d'ensemble" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Analyse ROI" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Sites" }, { key: "table", label: "Donnees" }];
 
   // =====================================================================
@@ -791,7 +938,7 @@ export default function ProgrammaticDashboard() {
         <div style={{ display: "flex", gap: 6, alignItems: "center", position: "relative" }}>
           <input type="file" accept=".csv,.tsv" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileImport} />
           <button style={S.btn} onClick={() => setShowImportPanel(!showImportPanel)}>Importer</button>
-          <button style={S.btn} onClick={() => { clearStoredData(); setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); }}>Demo</button>
+          <button style={S.btn} onClick={() => { clearStoredData(); setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setMatomoData([]); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); }}>Demo</button>
           <button style={{ ...S.btn, borderColor: NURU.gold, color: NURU.gold }} onClick={() => setShowLexique(true)}>Lexique</button>
           {showImportPanel && (
             <div style={S.importPanel} onClick={e => e.stopPropagation()}>
@@ -800,6 +947,7 @@ export default function ProgrammaticDashboard() {
                 <div><div style={{ fontSize: 10, color: NURU.textMuted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Campaign.csv *</div><input type="file" accept=".csv" ref={campaignFileRef} style={{ fontSize: 11, color: NURU.text }} /></div>
                 <div><div style={{ fontSize: 10, color: NURU.textMuted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Domain.csv</div><input type="file" accept=".csv" ref={domainFileRef} style={{ fontSize: 11, color: NURU.text }} /></div>
                 <div><div style={{ fontSize: 10, color: NURU.textMuted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Creatives.csv</div><input type="file" accept=".csv" ref={creativeFileRef} style={{ fontSize: 11, color: NURU.text }} /></div>
+                <div><div style={{ fontSize: 10, color: NURU.textMuted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Matomo.csv (UTF-16)</div><input type="file" accept=".csv" ref={matomoFileRef} style={{ fontSize: 11, color: NURU.text }} /></div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <button style={{ ...S.btn, borderColor: NURU.gold, color: NURU.gold }} onClick={handleCampaignImport}>Charger</button>
                   <button style={{ ...S.btn, fontSize: 10 }} onClick={() => { fileInputRef.current?.click(); setShowImportPanel(false); }}>CSV unique (demo)</button>
@@ -1131,6 +1279,180 @@ export default function ProgrammaticDashboard() {
             {domainPerformanceReal.length > 100 && <p style={{ padding: 12, color: NURU.textMuted, fontSize: 11, textAlign: "center" }}>100 premiers sur {domainPerformanceReal.length}</p>}
           </div>
         </div>)}
+
+        {/* ======= SITE & ROI MATOMO ======= */}
+        {activeTab === "matomo" && dataMode === "campaign" && matomoReconciliation && (() => {
+          const r = matomoReconciliation;
+          const k = r.kpis;
+          // Color a delta value: green when within ±15 %, gold beyond, red if very negative.
+          const deltaColor = (val, goodIfPositive = true) => {
+            if (Math.abs(val) < 15) return NURU.green;
+            if (goodIfPositive ? val < -30 : val > 30) return NURU.red;
+            return NURU.gold;
+          };
+          // Funnel: list of stages [{label, value, hint?}], displayed as proportional horizontal bars.
+          const Funnel = ({ title, stages }) => {
+            const max = Math.max(...stages.map(s => s.value || 0), 1);
+            return (
+              <div style={S.card}>
+                <div style={S.cardTitle}>{title}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {stages.map((s, i) => {
+                    const pct = (s.value / max) * 100;
+                    return (
+                      <div key={s.label}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 10, color: NURU.textMuted }}>
+                          <span style={{ fontWeight: 700, color: NURU.text }}>{s.label}</span>
+                          <span>{fmtNum(s.value)}{s.hint ? ` · ${s.hint}` : ""}</span>
+                        </div>
+                        <div style={{ height: 18, background: NURU.cardBorder, borderRadius: 4, overflow: "hidden", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: i === 0 ? NURU.gold : i === stages.length - 1 ? NURU.green : NURU.goldDark, transition: "width 0.4s ease" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          };
+          return (<>
+            <div style={{ ...S.formatInfo, marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: NURU.text, lineHeight: 1.5 }}>
+                <strong style={{ color: NURU.gold }}>Vue globale, hors filtres.</strong> Comparaison entre les chiffres du serveur Ads (impressions, clics, conversions diffusées) et ceux remontés par Matomo (visites réelles sur le site, comportement, conversions trackées). Les écarts s&apos;expliquent par les ad-blockers, l&apos;attribution post-view côté Ads et le délai d&apos;exécution du pixel Matomo.
+              </div>
+            </div>
+
+            {/* KPI cards */}
+            <div style={S.kpiRow}>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Visites Matomo (total)</div><div style={S.kpiValue}>{fmtNum(k.visitsAll)}</div><div style={{ fontSize: 10, color: NURU.textMuted, marginTop: 4 }}>dont {fmtNum(k.visitsAds)} via canaux Ads</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Taux d&apos;arrivée</div><div style={{ ...S.kpiValue, color: k.arrivalRate < 50 ? NURU.red : k.arrivalRate < 70 ? NURU.gold : NURU.green }}>{fmtPct(k.arrivalRate)}</div><div style={{ fontSize: 10, color: NURU.textMuted, marginTop: 4 }}>Visites ÷ Clics Ads</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>CPA réel (Matomo)</div><div style={S.kpiValue}>{k.realCpa > 0 ? fmtCurDec(k.realCpa) : "—"}</div><div style={{ fontSize: 10, color: NURU.textMuted, marginTop: 4 }}>vs CPA Ads {k.cpaAds > 0 ? fmtCurDec(k.cpaAds) : "—"}</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>ROAS</div><div style={{ ...S.kpiValue, color: k.roas > 100 ? NURU.green : k.roas > 50 ? NURU.gold : NURU.red }}>{fmtPct(k.roas)}</div><div style={{ fontSize: 10, color: NURU.textMuted, marginTop: 4 }}>Revenu Matomo ÷ Coût Ads</div></div>
+            </div>
+
+            <div style={S.kpiRow}>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Conversions Ads</div><div style={S.kpiValue}>{fmtNum(k.adsConversions)}</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Conversions Matomo</div><div style={S.kpiValue}>{fmtNum(k.matoConversions)}</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Δ Conv. (Matomo vs Ads)</div><div style={{ ...S.kpiValue, color: deltaColor(k.convDelta) }}>{(k.convDelta >= 0 ? "+" : "") + k.convDelta.toFixed(1)}%</div></div>
+              <div style={S.kpiCard}><div style={S.kpiLabel}>Taux de rebond moyen</div><div style={{ ...S.kpiValue, color: k.bounceRate > 70 ? NURU.red : k.bounceRate > 50 ? NURU.gold : NURU.green }}>{fmtPct(k.bounceRate)}</div></div>
+            </div>
+
+            {/* Comparison table */}
+            <div style={{ ...S.card, ...S.cardFull, overflowX: "auto", marginBottom: 16 }}>
+              <div style={S.cardTitle}>Comparaison Ads ↔ Matomo par canal</div>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Canal</th>
+                  <th style={S.th}>Impressions</th>
+                  <th style={S.th}>Clics Ads</th>
+                  <th style={S.th}>Visites Matomo</th>
+                  <th style={S.th}>Taux arrivée</th>
+                  <th style={S.th}>Conv. Ads</th>
+                  <th style={S.th}>Conv. Matomo</th>
+                  <th style={S.th}>Δ Conv.</th>
+                  <th style={S.th}>Coût Ads</th>
+                  <th style={S.th}>CPA réel</th>
+                  <th style={S.th}>Revenu</th>
+                  <th style={S.th}>ROAS</th>
+                  <th style={S.th}>Rebond</th>
+                  <th style={S.th}>Temps moy.</th>
+                </tr></thead>
+                <tbody>
+                  {r.comparable.map((row, i) => (
+                    <tr key={row.channel} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}>
+                      <td style={{ ...S.td, fontWeight: 700 }}><span style={S.badge}>{row.channel}</span></td>
+                      <td style={S.td}>{fmtNum(row.impressions)}</td>
+                      <td style={S.td}>{fmtNum(row.clicks)}</td>
+                      <td style={S.td}>{fmtNum(row.visits)}</td>
+                      <td style={{ ...S.td, color: row.arrivalRate < 50 ? NURU.red : row.arrivalRate < 70 ? NURU.gold : NURU.green, fontWeight: 700 }}>{fmtPct(row.arrivalRate)}</td>
+                      <td style={S.td}>{fmtNum(row.adsConversions)}</td>
+                      <td style={S.td}>{fmtNum(row.matoConversions)}</td>
+                      <td style={{ ...S.td, color: deltaColor(row.convDelta), fontWeight: 700 }}>{(row.convDelta >= 0 ? "+" : "") + row.convDelta.toFixed(0)}%</td>
+                      <td style={S.td}>{fmtCurDec(row.spend)}</td>
+                      <td style={S.td}>{row.realCpa > 0 ? fmtCurDec(row.realCpa) : "—"}</td>
+                      <td style={S.td}>{fmtCurDec(row.revenue)}</td>
+                      <td style={{ ...S.td, color: row.roas > 100 ? NURU.green : row.roas > 50 ? NURU.gold : NURU.red, fontWeight: 700 }}>{fmtPct(row.roas)}</td>
+                      <td style={S.td}>{fmtPct(row.bounceRate)}</td>
+                      <td style={S.td}>{Math.round(row.avgTime)}s</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: NURU.goldMuted, fontWeight: 700 }}>
+                    <td style={{ ...S.td, color: NURU.gold, fontWeight: 800 }}>TOTAL</td>
+                    <td style={S.td}>{fmtNum(r.comparable.reduce((s, x) => s + x.impressions, 0))}</td>
+                    <td style={S.td}>{fmtNum(r.comparable.reduce((s, x) => s + x.clicks, 0))}</td>
+                    <td style={S.td}>{fmtNum(k.visitsAds)}</td>
+                    <td style={{ ...S.td, color: NURU.gold, fontWeight: 700 }}>{fmtPct(k.arrivalRate)}</td>
+                    <td style={S.td}>{fmtNum(k.adsConversions)}</td>
+                    <td style={S.td}>{fmtNum(r.comparable.reduce((s, x) => s + x.matoConversions, 0))}</td>
+                    <td style={{ ...S.td, color: deltaColor(k.convDelta), fontWeight: 700 }}>{(k.convDelta >= 0 ? "+" : "") + k.convDelta.toFixed(0)}%</td>
+                    <td style={S.td}>{fmtCurDec(k.spend)}</td>
+                    <td style={S.td}>{k.realCpa > 0 ? fmtCurDec(k.realCpa) : "—"}</td>
+                    <td style={S.td}>{fmtCurDec(k.revenue)}</td>
+                    <td style={{ ...S.td, color: k.roas > 100 ? NURU.green : k.roas > 50 ? NURU.gold : NURU.red, fontWeight: 700 }}>{fmtPct(k.roas)}</td>
+                    <td style={S.td}>{fmtPct(k.bounceRate)}</td>
+                    <td style={S.td}>—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Funnels */}
+            <div style={S.grid}>
+              {r.comparable.map(row => (
+                <Funnel key={row.channel} title={`Funnel ${row.channel}`} stages={[
+                  { label: "Impressions", value: row.impressions },
+                  { label: "Clics Ads", value: row.clicks, hint: `CTR ${row.impressions > 0 ? ((row.clicks / row.impressions) * 100).toFixed(2) : 0}%` },
+                  { label: "Visites Matomo", value: row.visits, hint: `Arrivée ${row.arrivalRate.toFixed(0)}%` },
+                  { label: "Visites avec conv.", value: row.visitsWithConv, hint: row.visits > 0 && row.visitsWithConv > 0 ? `${((row.visitsWithConv / row.visits) * 100).toFixed(2)}% des visites` : "" },
+                ]} />
+              ))}
+              {r.matomoOnly.length > 0 && (
+                <Funnel
+                  title={`Hors Ads server (${r.matomoOnly.map(m => m.channel).join(" + ")})`}
+                  stages={[
+                    { label: "Visites Matomo", value: r.matomoOnly.reduce((s, m) => s + m.visits, 0) },
+                    { label: "Conversions", value: r.matomoOnly.reduce((s, m) => s + m.matoConversions, 0) },
+                  ]}
+                />
+              )}
+            </div>
+
+            {/* Matomo only */}
+            {r.matomoOnly.length > 0 && (
+              <div style={{ ...S.card, ...S.cardFull, overflowX: "auto", marginBottom: 16 }}>
+                <div style={S.cardTitle}>Canaux hors serveur Ads (Matomo seul)</div>
+                <table style={S.table}>
+                  <thead><tr>
+                    <th style={S.th}>Canal</th>
+                    <th style={S.th}>Visites</th>
+                    <th style={S.th}>Conversions</th>
+                    <th style={S.th}>Revenu</th>
+                    <th style={S.th}>Rebond</th>
+                    <th style={S.th}>Temps moy.</th>
+                    <th style={S.th}>Actions / visite</th>
+                  </tr></thead>
+                  <tbody>
+                    {r.matomoOnly.map((row, i) => (
+                      <tr key={row.channel} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}>
+                        <td style={{ ...S.td, fontWeight: 700 }}><span style={S.badge}>{row.channel}</span></td>
+                        <td style={S.td}>{fmtNum(row.visits)}</td>
+                        <td style={S.td}>{fmtNum(row.matoConversions)}</td>
+                        <td style={S.td}>{fmtCurDec(row.revenue)}</td>
+                        <td style={{ ...S.td, color: row.bounceRate > 70 ? NURU.red : row.bounceRate > 50 ? NURU.gold : NURU.green }}>{fmtPct(row.bounceRate)}</td>
+                        <td style={S.td}>{Math.round(row.avgTime)}s</td>
+                        <td style={S.td}>{row.actionsPerVisit.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ fontSize: 10, color: NURU.textMuted, lineHeight: 1.6, padding: "0 4px" }}>
+              <strong style={{ color: NURU.text }}>Méthodologie.</strong> Mapping canal Matomo → Ads server : <code>display</code> → Display, <code>native_ads</code> → Native, <code>meta_fb</code>/<code>meta_ig</code> → bloc isolé (Meta n&apos;est pas opéré via le serveur Ads). Le <em>taux d&apos;arrivée</em> compare Visites Matomo et Clics Ads — un taux &lt; 70 % traduit une déperdition (ad-blockers, JS bloqué, page lente, faux clics). Le <em>CPA réel</em> divise le coût media par les conversions trackées Matomo (post-clic uniquement) : il est généralement plus haut que le CPA Ads qui inclut l&apos;attribution post-view.
+            </div>
+          </>);
+        })()}
 
         {/* ======= TABLE (demo) ======= */}
         {activeTab === "table" && dataMode === "demo" && (<div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Donnees brutes ({filteredData.length.toLocaleString("fr-FR")} lignes)</div>
