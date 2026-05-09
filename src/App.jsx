@@ -223,6 +223,20 @@ function normalizeCreativeRow(row) {
 }
 
 // =====================================================================
+// PERSISTENCE
+// =====================================================================
+const STORAGE_KEY = "nuru_dashboard_data_v1";
+function loadStoredData() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function saveStoredData(payload) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (e) { console.warn("Persistance CSV impossible:", e); }
+}
+function clearStoredData() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+// =====================================================================
 // UTILS
 // =====================================================================
 const fmtNum = (n) => { if (n >= 1e6) return (n/1e6).toFixed(1)+"M"; if (n >= 1e3) return (n/1e3).toFixed(1)+"K"; return typeof n==="number" ? n.toLocaleString("fr-FR") : n; };
@@ -311,17 +325,42 @@ export default function ProgrammaticDashboard() {
   const creativeFileRef = useRef(null);
 
   // =====================================================================
-  // AUTO-LOAD EMBEDDED CSVs
+  // AUTO-LOAD: persisted import (localStorage) > embedded CSVs > demo
   // =====================================================================
   useEffect(() => {
+    const parseCsv = (text) => Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data;
+
+    function hydrateFromStored() {
+      const stored = loadStoredData();
+      if (!stored) return false;
+      try {
+        if (stored.mode === "campaign") {
+          const camp = parseCsv(stored.campaign || "").map(normalizeCampaignRow).filter(r => r.campaignName);
+          if (camp.length === 0) return false;
+          const dom = stored.domain ? parseCsv(stored.domain).map(normalizeDomainRow).filter(r => r.domain) : [];
+          const crea = stored.creative ? parseCsv(stored.creative).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
+          setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea);
+          setDataMode("campaign"); setDataSource(stored.source || "Import campagne"); setRawData([]);
+          return true;
+        }
+        if (stored.mode === "demo-single") {
+          const parsed = Papa.parse(stored.csv || "", { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+          if (parsed.length === 0) return false;
+          setRawData(parsed); setDataSource(stored.source || "demo"); setDataMode("demo");
+          setCampaignData([]); setDomainData([]); setCreativeRealData([]);
+          return true;
+        }
+      } catch { /* ignore corrupted storage */ }
+      return false;
+    }
+
     async function loadEmbeddedData() {
       try {
         const [campRes, domRes, creaRes] = await Promise.all([
           fetch(import.meta.env.BASE_URL + "data/Campaign.csv"), fetch(import.meta.env.BASE_URL + "data/Domain.csv"), fetch(import.meta.env.BASE_URL + "data/Creatives.csv")
         ]);
-        if (!campRes.ok || !domRes.ok || !creaRes.ok) return; // fallback to demo
+        if (!campRes.ok || !domRes.ok || !creaRes.ok) return;
         const [campText, domText, creaText] = await Promise.all([campRes.text(), domRes.text(), creaRes.text()]);
-        const parseCsv = (text) => Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data;
         const camp = parseCsv(campText).map(normalizeCampaignRow).filter(r => r.campaignName);
         const dom = parseCsv(domText).map(normalizeDomainRow).filter(r => r.domain);
         const crea = parseCsv(creaText).map(normalizeCreativeRow).filter(r => r.creativeName);
@@ -335,38 +374,44 @@ export default function ProgrammaticDashboard() {
         }
       } catch { /* stay in demo mode */ }
     }
-    loadEmbeddedData();
+
+    if (!hydrateFromStored()) loadEmbeddedData();
   }, []);
 
   // =====================================================================
   // DEMO MODE: single file import (backward compat)
   // =====================================================================
-  const handleFileImport = useCallback((e) => {
+  const handleFileImport = useCallback(async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    Papa.parse(file, { header: true, dynamicTyping: true, skipEmptyLines: true,
-      complete: (r) => { if (r.data.length > 0) { setRawData(r.data); setDataSource(file.name); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); } } });
+    const text = await file.text();
+    const parsed = Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+    if (parsed.length > 0) {
+      setRawData(parsed); setDataSource(file.name); setDataMode("demo");
+      setCampaignData([]); setDomainData([]); setCreativeRealData([]);
+      saveStoredData({ mode: "demo-single", csv: text, source: file.name });
+    }
   }, []);
 
   // =====================================================================
   // CAMPAIGN MODE: multi-file import
   // =====================================================================
-  const handleCampaignImport = useCallback(() => {
-    const files = { campaign: campaignFileRef.current?.files?.[0], domain: domainFileRef.current?.files?.[0], creative: creativeFileRef.current?.files?.[0] };
-    if (!files.campaign) return;
-    const parseFile = (file) => new Promise((resolve) => {
-      if (!file) { resolve([]); return; }
-      Papa.parse(file, { header: true, skipEmptyLines: true, complete: (r) => resolve(r.data) });
-    });
-    Promise.all([parseFile(files.campaign), parseFile(files.domain), parseFile(files.creative)]).then(([campRows, domRows, creaRows]) => {
-      const camp = campRows.map(normalizeCampaignRow).filter(r => r.campaignName);
-      const dom = domRows.map(normalizeDomainRow).filter(r => r.domain);
-      const crea = creaRows.map(normalizeCreativeRow).filter(r => r.creativeName);
-      if (camp.length > 0) {
-        setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea);
-        setDataMode("campaign"); setDataSource("Import campagne"); setRawData([]);
-        setShowImportPanel(false); setSelectedPersonas([]); setSelectedChannelTypes([]);
-      }
-    });
+  const handleCampaignImport = useCallback(async () => {
+    const campFile = campaignFileRef.current?.files?.[0];
+    if (!campFile) return;
+    const domFile = domainFileRef.current?.files?.[0];
+    const creaFile = creativeFileRef.current?.files?.[0];
+    const readText = (f) => f ? f.text() : Promise.resolve("");
+    const [campText, domText, creaText] = await Promise.all([readText(campFile), readText(domFile), readText(creaFile)]);
+    const parseCsv = (text) => Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data;
+    const camp = parseCsv(campText).map(normalizeCampaignRow).filter(r => r.campaignName);
+    const dom = domText ? parseCsv(domText).map(normalizeDomainRow).filter(r => r.domain) : [];
+    const crea = creaText ? parseCsv(creaText).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
+    if (camp.length > 0) {
+      setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea);
+      setDataMode("campaign"); setDataSource("Import campagne"); setRawData([]);
+      setShowImportPanel(false); setSelectedPersonas([]); setSelectedChannelTypes([]);
+      saveStoredData({ mode: "campaign", campaign: campText, domain: domText, creative: creaText, source: "Import campagne" });
+    }
   }, []);
 
   // =====================================================================
@@ -746,7 +791,7 @@ export default function ProgrammaticDashboard() {
         <div style={{ display: "flex", gap: 6, alignItems: "center", position: "relative" }}>
           <input type="file" accept=".csv,.tsv" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileImport} />
           <button style={S.btn} onClick={() => setShowImportPanel(!showImportPanel)}>Importer</button>
-          <button style={S.btn} onClick={() => { setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); }}>Demo</button>
+          <button style={S.btn} onClick={() => { clearStoredData(); setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); }}>Demo</button>
           <button style={{ ...S.btn, borderColor: NURU.gold, color: NURU.gold }} onClick={() => setShowLexique(true)}>Lexique</button>
           {showImportPanel && (
             <div style={S.importPanel} onClick={e => e.stopPropagation()}>
