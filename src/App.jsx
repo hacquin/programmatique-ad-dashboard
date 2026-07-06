@@ -287,22 +287,35 @@ function normalizeMatomoRow(row) {
   };
 }
 
+// Tailles Native connues ; toute autre taille IAB (728x90, 300x250, 160x600, 300x600, 970x250...) = Display.
+const NATIVE_CREATIVE_SIZES = new Set(["600x600", "800x600", "1200x627", "1080x1080", "1200x628"]);
+const sizeFromName = (name) => { const m = String(name || "").match(/(\d{2,4}x\d{2,4})/); return m ? m[1] : ""; };
+const channelFromSize = (size) => size ? (NATIVE_CREATIVE_SIZES.has(size) ? "Native" : "Display") : "";
+
 function normalizeCreativeRow(row) {
+  // Deux formats d'export StackAdapt :
+  //  - Ancien (rapport annonceur) : colonnes "Creatives" + "Creative Size" + "Channel Type" + "Campaign", nombres FR.
+  //  - Nouveau (rapport creatif)   : colonne "Creative Name" seule, nombres EN ; taille et canal deduits du nom.
+  const isLegacy = row["Creatives"] !== undefined;
+  const num = isLegacy ? parseFR : parseEN;
+  const creativeName = (isLegacy ? row["Creatives"] : row["Creative Name"]) || "";
   const campaignName = row["Campaign"] || "";
-  const { persona, channelType } = parseCampaignName(campaignName);
+  const parsed = parseCampaignName(campaignName);
+  const creativeSize = row["Creative Size"] || sizeFromName(creativeName);
+  const channelType = row["Channel Type"] || parsed.channelType || channelFromSize(creativeSize);
   return {
-    campaignName, persona, channelType,
-    creativeSize: row["Creative Size"] || "",
+    campaignName, persona: parsed.persona, channelType,
+    creativeSize,
     creativeId: row["Creative ID"] || "",
-    creativeName: row["Creatives"] || "",
-    mediaCost: parseFR(row["Media Cost"]),
-    impressions: parseFR(row["Impressions"]),
-    clicks: parseFR(row["Clicks"]),
-    conversions: parseFR(row["Conversions"]),
-    eCPM: parseFR(row["eCPM"]),
-    ctr: parseFR(row["CTR"]),
-    eCPC: parseFR(row["eCPC"]),
-    eCPA: parseFR(row["eCPA"]),
+    creativeName,
+    mediaCost: num(row["Media Cost"]),
+    impressions: num(row["Impressions"]),
+    clicks: num(row["Clicks"]),
+    conversions: num(row["Conversions"] != null ? row["Conversions"] : row["Convs"]),
+    eCPM: num(row["eCPM"]),
+    ctr: num(row["CTR"]),
+    eCPC: num(row["eCPC"]),
+    eCPA: num(row["eCPA"]),
   };
 }
 
@@ -319,9 +332,7 @@ const IMPORT_SCHEMA = {
       "Impressions": "les KPIs (impressions, CPM)",
       "Clicks": "les KPIs (clics, CTR)",
       "Media Cost": "les depenses et les couts",
-      "Impressions Viewed": "l'onglet Visibilite",
-      "Impressions Measurable": "l'onglet Visibilite",
-      "View %": "l'onglet Visibilite",
+      "View %": "l'onglet Visibilite (viewability absente de cet export)",
     },
   },
   domain: {
@@ -329,8 +340,8 @@ const IMPORT_SCHEMA = {
     recommended: { "Impressions": "l'onglet Domaines", "Media Cost": "les depenses par domaine" },
   },
   creative: {
-    required: ["Creatives"],
-    recommended: { "Creative Size": "l'onglet Par format (repartition par taille)", "Impressions": "les performances par creatif" },
+    anyOf: [["Creatives", "Creative Name"]],
+    recommended: { "Impressions": "les performances par creatif" },
   },
 };
 
@@ -996,6 +1007,99 @@ export default function ProgrammaticDashboard() {
   }, [matomoData, campaignData]);
 
   // =====================================================================
+  // BILAN DE CAMPAGNE — synthese data-driven (sur le dataset complet,
+  // les filtres ne s'appliquent pas pour garder un bilan global stable).
+  // =====================================================================
+  const campaignSummary = useMemo(() => {
+    if (!campaignData.length) return null;
+    const sum = (arr, k) => arr.reduce((s, r) => s + (r[k] || 0), 0);
+    const withRatios = (o) => ({
+      ...o,
+      ctr: o.impressions > 0 ? (o.clicks / o.impressions) * 100 : 0,
+      cpm: o.impressions > 0 ? o.spend / (o.impressions / 1000) : 0,
+      cpc: o.clicks > 0 ? o.spend / o.clicks : 0,
+      cpa: o.conversions > 0 ? o.spend / o.conversions : 0,
+    });
+
+    const tot = withRatios({
+      impressions: sum(campaignData, "impressions"),
+      clicks: sum(campaignData, "clicks"),
+      spend: sum(campaignData, "mediaCost"),
+      budget: sum(campaignData, "lifetimeBudget"),
+      conversions: sum(campaignData, "conversions"),
+    });
+    tot.pacing = tot.budget > 0 ? (tot.spend / tot.budget) * 100 : 0;
+
+    // Par canal
+    const chanMap = {};
+    campaignData.forEach(r => {
+      const k = r.channelType || "Autre";
+      if (!chanMap[k]) chanMap[k] = { channel: k, impressions: 0, clicks: 0, spend: 0, budget: 0, conversions: 0 };
+      const m = chanMap[k]; m.impressions += r.impressions; m.clicks += r.clicks; m.spend += r.mediaCost; m.budget += r.lifetimeBudget; m.conversions += r.conversions;
+    });
+    const channels = Object.values(chanMap).map(c => ({
+      ...withRatios(c),
+      budgetShare: tot.spend > 0 ? (c.spend / tot.spend) * 100 : 0,
+      clickShare: tot.clicks > 0 ? (c.clicks / tot.clicks) * 100 : 0,
+      convShare: tot.conversions > 0 ? (c.conversions / tot.conversions) * 100 : 0,
+    })).sort((a, b) => b.spend - a.spend);
+    const byCtr = [...channels].sort((a, b) => b.ctr - a.ctr);
+    const bestChannel = byCtr[0] || null;
+    const worstChannel = channels.length > 1 ? byCtr[byCtr.length - 1] : null;
+
+    // Par cible
+    const persMap = {};
+    campaignData.forEach(r => {
+      const k = r.persona || "Autre";
+      if (!persMap[k]) persMap[k] = { persona: k, impressions: 0, clicks: 0, spend: 0, budget: 0, conversions: 0 };
+      const m = persMap[k]; m.impressions += r.impressions; m.clicks += r.clicks; m.spend += r.mediaCost; m.budget += r.lifetimeBudget; m.conversions += r.conversions;
+    });
+    const personas = Object.values(persMap).map(withRatios).sort((a, b) => b.spend - a.spend);
+
+    // Créatifs par taille (CTR)
+    const sizeMap = {};
+    creativeRealData.forEach(r => {
+      const k = r.creativeSize || "Autre";
+      if (!sizeMap[k]) sizeMap[k] = { size: k, channelType: r.channelType, impressions: 0, clicks: 0, spend: 0 };
+      const m = sizeMap[k]; m.impressions += r.impressions; m.clicks += r.clicks; m.spend += r.mediaCost;
+    });
+    const sizes = Object.values(sizeMap).map(s => ({ ...s, ctr: s.impressions > 0 ? (s.clicks / s.impressions) * 100 : 0 })).filter(s => s.impressions > 0).sort((a, b) => b.ctr - a.ctr);
+
+    // Top créatifs (par clics)
+    const topCreatives = [...creativePerformance].sort((a, b) => b.clicks - a.clicks).slice(0, 8);
+
+    // Domaines
+    const domMap = {};
+    domainData.forEach(r => {
+      if (!r.domain) return;
+      if (!domMap[r.domain]) domMap[r.domain] = { site: r.domain, impressions: 0, clicks: 0, spend: 0, conversions: 0 };
+      const m = domMap[r.domain]; m.impressions += r.impressions; m.clicks += r.clicks; m.spend += r.mediaCost; m.conversions += r.conversions;
+    });
+    const domains = Object.values(domMap).map(d => ({ ...d, ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0, cpa: d.conversions > 0 ? d.spend / d.conversions : 0 }));
+    const topSpendDomains = [...domains].sort((a, b) => b.spend - a.spend).slice(0, 8);
+    const topCtrDomains = domains.filter(d => d.impressions >= 5000).sort((a, b) => b.ctr - a.ctr).slice(0, 6);
+    const weakDomains = domains.filter(d => d.spend >= 100 && d.ctr < 0.10).sort((a, b) => b.spend - a.spend).slice(0, 6);
+    const wastedSpend = weakDomains.reduce((s, d) => s + d.spend, 0);
+
+    // Recommandations générées à partir des faits
+    const reco = [];
+    if (bestChannel && worstChannel && bestChannel.channel !== worstChannel.channel) {
+      reco.push(`Renforcer le ${bestChannel.channel} : CTR ${bestChannel.ctr.toFixed(2)}% et clic à ${bestChannel.cpc.toFixed(2)} € contre ${worstChannel.ctr.toFixed(2)}% et ${worstChannel.cpc.toFixed(2)} € pour le ${worstChannel.channel}. Il capte ${bestChannel.budgetShare.toFixed(0)} % du budget pour ${bestChannel.clickShare.toFixed(0)} % des clics.`);
+    }
+    if (weakDomains.length > 0) {
+      reco.push(`Exclure ou plafonner ${weakDomains.slice(0, 3).map(d => d.site).join(", ")}${weakDomains.length > 3 ? "…" : ""} : CTR sous 0,10 % pour ${fmtCur(wastedSpend)} dépensés — budget réallouable vers les sites performants.`);
+    }
+    if (sizes.length > 0) {
+      reco.push(`Décliner davantage le format ${sizes[0].size}, qui porte le meilleur CTR (${sizes[0].ctr.toFixed(2)} %).`);
+    }
+    if (topCtrDomains.length > 0) {
+      reco.push(`Prioriser via whitelist les contextes les plus qualitatifs : ${topCtrDomains.slice(0, 4).map(d => d.site).join(", ")}.`);
+    }
+
+    return { tot, channels, bestChannel, worstChannel, personas, sizes, topCreatives, topSpendDomains, topCtrDomains, weakDomains, wastedSpend, reco, flightStart: campaignData[0]?.flightStart || "", flightEnd: campaignData[0]?.flightEnd || "" };
+  }, [campaignData, domainData, creativeRealData, creativePerformance]);
+
+  // =====================================================================
   // STYLES
   // =====================================================================
   const S = {
@@ -1057,7 +1161,7 @@ export default function ProgrammaticDashboard() {
 
   // Tab definitions
   const tabsDef = dataMode === "campaign"
-    ? [{ key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Couts" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, ...(matomoData.length > 0 ? [{ key: "matomo", label: "Site & ROI (Matomo)" }] : []), { key: "table", label: "Donnees" }]
+    ? [{ key: "bilan", label: "Bilan" }, { key: "overview", label: "Vue d'ensemble" }, { key: "personas", label: "Par cible" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Couts" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Domaines" }, ...(matomoData.length > 0 ? [{ key: "matomo", label: "Site & ROI (Matomo)" }] : []), { key: "table", label: "Donnees" }]
     : [{ key: "overview", label: "Vue d'ensemble" }, { key: "formats", label: "Par format" }, { key: "creatives", label: "Par axe creatif" }, { key: "roi", label: "Couts" }, { key: "visibility", label: "Visibilite" }, { key: "sites", label: "Sites" }, { key: "table", label: "Donnees" }];
 
   // =====================================================================
@@ -1214,6 +1318,92 @@ export default function ProgrammaticDashboard() {
             </div>
           </div>
         </>)}
+
+        {/* ======= BILAN (campaign) ======= */}
+        {activeTab === "bilan" && dataMode === "campaign" && campaignSummary && (() => {
+          const cs = campaignSummary;
+          const period = cs.flightStart && cs.flightEnd ? `${cs.flightStart} → ${cs.flightEnd}` : "";
+          const bestPersona = [...cs.personas].filter(p => p.cpa > 0).sort((a, b) => a.cpa - b.cpa)[0] || cs.personas[0];
+          return (<>
+            <div style={{ ...S.formatInfo, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: NURU.gold, marginBottom: 6 }}>Bilan de campagne</div>
+              <div style={{ fontSize: 12, color: NURU.text, lineHeight: 1.6 }}>
+                {period && <><strong>Période :</strong> {period} · </>}
+                <strong>Budget :</strong> {fmtCur(cs.tot.spend)} investis sur {fmtCur(cs.tot.budget)} planifiés (pacing {cs.tot.pacing.toFixed(0)} %).{" "}
+                La campagne a généré <strong>{fmtNum(cs.tot.impressions)}</strong> impressions et <strong>{fmtNum(cs.tot.clicks)}</strong> clics, soit un CTR global de <strong>{fmtPct(cs.tot.ctr)}</strong>{cs.bestChannel ? <>, porté par le <strong>{cs.bestChannel.channel}</strong> (CTR {fmtPct(cs.bestChannel.ctr)})</> : null}.
+              </div>
+            </div>
+
+            <div style={S.kpiRow}>
+              {[
+                { label: "Budget", value: `${fmtCur(cs.tot.spend)} / ${fmtCur(cs.tot.budget)}` },
+                { label: "Pacing", value: cs.tot.pacing.toFixed(0) + "%" },
+                { label: "Impressions", value: fmtNum(cs.tot.impressions) },
+                { label: "Clics", value: fmtNum(cs.tot.clicks) },
+                { label: "CTR", value: fmtPct(cs.tot.ctr) },
+                { label: "CPM", value: fmtCurDec(cs.tot.cpm) },
+                { label: "CPC", value: fmtCurDec(cs.tot.cpc) },
+                { label: "Conversions", value: fmtNum(cs.tot.conversions) },
+                { label: "CPA", value: cs.tot.cpa > 0 ? fmtCur(cs.tot.cpa) : "—" },
+              ].map(k => (<div key={k.label} style={S.kpiCard}><div style={S.kpiLabel}>{k.label}<InfoBtn label={k.label} /></div><div style={{ ...S.kpiValue, fontSize: 17 }}>{k.value}</div></div>))}
+            </div>
+
+            <div style={S.grid}>
+              <div style={S.card}><div style={S.cardTitle}>Points clés</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: NURU.text, lineHeight: 1.7 }}>
+                  {cs.bestChannel && cs.worstChannel && cs.bestChannel.channel !== cs.worstChannel.channel && (
+                    <li>Le <strong>{cs.bestChannel.channel}</strong> surperforme le {cs.worstChannel.channel} : CTR {fmtPct(cs.bestChannel.ctr)} vs {fmtPct(cs.worstChannel.ctr)}, CPC {fmtCurDec(cs.bestChannel.cpc)} vs {fmtCurDec(cs.worstChannel.cpc)}.</li>
+                  )}
+                  {cs.bestChannel && <li>Le {cs.bestChannel.channel} capte {cs.bestChannel.budgetShare.toFixed(0)} % du budget pour {cs.bestChannel.clickShare.toFixed(0)} % des clics{cs.tot.conversions > 0 ? ` et ${cs.bestChannel.convShare.toFixed(0)} % des conversions` : ""}.</li>}
+                  {cs.sizes[0] && <li>Meilleur format créatif : <strong>{cs.sizes[0].size}</strong> ({fmtPct(cs.sizes[0].ctr)} de CTR).</li>}
+                  {cs.weakDomains.length > 0 && <li>{cs.weakDomains.length} site(s) sous-performant(s) (CTR &lt; 0,10 %) pour {fmtCur(cs.wastedSpend)} — budget optimisable.</li>}
+                  {cs.personas.length > 1 && bestPersona && <li>Cible la plus efficiente (CPA) : <strong>{bestPersona.persona}</strong>.</li>}
+                </ul>
+              </div>
+              <div style={S.card}><div style={S.cardTitle}>Recommandations</div>
+                <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: NURU.text, lineHeight: 1.7 }}>
+                  {cs.reco.map((r, i) => <li key={i} style={{ marginBottom: 6 }}>{r}</li>)}
+                  {cs.reco.length === 0 && <li style={{ color: NURU.textMuted }}>Pas assez de données pour générer des recommandations.</li>}
+                </ol>
+              </div>
+            </div>
+
+            <div style={S.grid}>
+              <div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Performance par canal</div>
+                <table style={S.table}><thead><tr>{["Canal", "Depenses", "Part budget", "Impressions", "Clics", "CTR", "CPC", "Conv.", "CPA"].map(h => thInfo(h))}</tr></thead>
+                  <tbody>{cs.channels.map((c, i) => (<tr key={c.channel} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={S.td}><span style={S.badge}>{c.channel}</span></td><td style={S.td}>{fmtCur(c.spend)}</td><td style={S.td}>{c.budgetShare.toFixed(0)}%</td><td style={S.td}>{fmtNum(c.impressions)}</td><td style={S.td}>{fmtNum(c.clicks)}</td><td style={S.td}>{fmtPct(c.ctr)}</td><td style={S.td}>{fmtCurDec(c.cpc)}</td><td style={S.td}>{fmtNum(c.conversions)}</td><td style={S.td}>{c.cpa > 0 ? fmtCur(c.cpa) : "—"}</td></tr>))}</tbody></table>
+              </div>
+              <div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Performance par cible</div>
+                <table style={S.table}><thead><tr>{["Cible", "Depenses", "Impressions", "Clics", "CTR", "CPM", "Conv.", "CPA"].map(h => thInfo(h))}</tr></thead>
+                  <tbody>{cs.personas.map((p, i) => (<tr key={p.persona} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600, fontSize: 10 }}>{p.persona}</td><td style={S.td}>{fmtCur(p.spend)}</td><td style={S.td}>{fmtNum(p.impressions)}</td><td style={S.td}>{fmtNum(p.clicks)}</td><td style={S.td}>{fmtPct(p.ctr)}</td><td style={S.td}>{fmtCurDec(p.cpm)}</td><td style={S.td}>{fmtNum(p.conversions)}</td><td style={S.td}>{p.cpa > 0 ? fmtCur(p.cpa) : "—"}</td></tr>))}</tbody></table>
+              </div>
+            </div>
+
+            <div style={S.grid}>
+              <div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Top sites (dépenses)</div>
+                <table style={S.table}><thead><tr>{["Site", "Depenses", "Impressions", "Clics", "CTR"].map(h => thInfo(h))}</tr></thead>
+                  <tbody>{cs.topSpendDomains.map((d, i) => (<tr key={d.site} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{d.site}</td><td style={S.td}>{fmtCurDec(d.spend)}</td><td style={S.td}>{fmtNum(d.impressions)}</td><td style={S.td}>{fmtNum(d.clicks)}</td><td style={S.td}>{fmtPct(d.ctr)}</td></tr>))}</tbody></table>
+              </div>
+              <div style={{ ...S.card, overflowX: "auto" }}><div style={S.cardTitle}>Sites à optimiser (CTR &lt; 0,10 %)</div>
+                {cs.weakDomains.length > 0 ? (
+                  <table style={S.table}><thead><tr>{["Site", "Depenses", "Impressions", "Clics", "CTR"].map(h => thInfo(h))}</tr></thead>
+                    <tbody>{cs.weakDomains.map((d, i) => (<tr key={d.site} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{d.site}</td><td style={{ ...S.td, color: NURU.red }}>{fmtCurDec(d.spend)}</td><td style={S.td}>{fmtNum(d.impressions)}</td><td style={S.td}>{fmtNum(d.clicks)}</td><td style={{ ...S.td, color: NURU.red }}>{fmtPct(d.ctr)}</td></tr>))}</tbody></table>
+                ) : <div style={{ fontSize: 12, color: NURU.textMuted }}>Aucun site sous le seuil — diffusion homogène.</div>}
+              </div>
+            </div>
+
+            <div style={S.grid}>
+              <div style={{ ...S.card, ...S.cardFull, overflowX: "auto" }}><div style={S.cardTitle}>Créatifs — CTR par format</div>
+                <table style={S.table}><thead><tr>{["Taille", "Canal", "Impressions", "Clics", "CTR"].map(h => thInfo(h))}</tr></thead>
+                  <tbody>{cs.sizes.map((s, i) => (<tr key={s.size} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}><td style={{ ...S.td, fontWeight: 600 }}>{s.size}</td><td style={S.td}>{s.channelType ? <span style={S.badge}>{s.channelType}</span> : "—"}</td><td style={S.td}>{fmtNum(s.impressions)}</td><td style={S.td}>{fmtNum(s.clicks)}</td><td style={S.td}>{fmtPct(s.ctr)}</td></tr>))}</tbody></table>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 10, color: NURU.textDark, marginTop: 4, lineHeight: 1.6 }}>
+              Bilan calculé sur l'ensemble de la campagne (les filtres du bandeau ne s'appliquent pas ici). Viewability et fréquence non disponibles dans cet export ; les conversions correspondent aux actions trackées côté serveur publicitaire.
+            </div>
+          </>);
+        })()}
 
         {/* ======= OVERVIEW CAMPAIGN ======= */}
         {activeTab === "overview" && dataMode === "campaign" && campaignKpis && (<>
