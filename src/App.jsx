@@ -59,6 +59,12 @@ const CAMPAIGN_OBJECTIVES = [
   { label: "Clics", key: "clicks", target: 10350 },
 ];
 
+// Objectifs estimes par cible (match = sous-chaine du nom de persona). A ajuster ici.
+const PERSONA_OBJECTIVES = [
+  { match: "famille", label: "Famille exploratrice", budget: 10000, impressions: 1250000, clicks: 6050, cpc: 1.65, cpm: 8 },
+  { match: "couple", label: "Couple deconnexion", budget: 8000, impressions: 900000, clicks: 4300, cpc: 1.85, cpm: 9 },
+];
+
 // =====================================================================
 // LEXIQUE
 // =====================================================================
@@ -1410,6 +1416,46 @@ export default function ProgrammaticDashboard() {
                 );
               })()}
             </div>
+
+            {/* OBJECTIFS PAR CIBLE — résultat vs estimation */}
+            {(() => {
+              const rows = PERSONA_OBJECTIVES.map(obj => ({ obj, real: cs.personas.find(p => p.persona.toLowerCase().includes(obj.match)) })).filter(r => r.real);
+              if (!rows.length) return null;
+              const objTot = PERSONA_OBJECTIVES.reduce((a, o) => ({ budget: a.budget + o.budget, impressions: a.impressions + o.impressions, clicks: a.clicks + o.clicks }), { budget: 0, impressions: 0, clicks: 0 });
+              const volCell = (real, obj) => { const pct = obj > 0 ? (real / obj) * 100 : 0; const ok = pct >= 100; return (<td style={S.td}><div style={{ fontWeight: 700 }}>{fmtNum(real)}</div><div style={{ fontSize: 9, color: NURU.textMuted }}>obj {fmtNum(obj)} · <span style={{ color: ok ? NURU.green : NURU.gold, fontWeight: 700 }}>{pct.toFixed(0)}%</span></div></td>); };
+              const costCell = (real, obj) => { const ok = real <= obj; const delta = obj > 0 ? ((real - obj) / obj) * 100 : 0; return (<td style={S.td}><div style={{ fontWeight: 700 }}>{fmtDec(real)} €</div><div style={{ fontSize: 9, color: NURU.textMuted }}>obj {fmtDec(obj)} € · <span style={{ color: ok ? NURU.green : NURU.red, fontWeight: 700 }}>{ok ? "✓ " : "+"}{delta.toFixed(0)}%</span></div></td>); };
+              const budCell = (spend, budget) => (<td style={S.td}><div style={{ fontWeight: 700 }}>{fmtCur(spend)}</div><div style={{ fontSize: 9, color: NURU.textMuted }}>estimé {fmtCur(budget)}</div></td>);
+              return (
+                <div style={{ ...S.card, ...S.cardFull, overflowX: "auto", marginBottom: 20 }}>
+                  <div style={S.cardTitle}>Résultat vs objectifs — par cible</div>
+                  <table style={S.table}><thead><tr>{["Cible", "Budget", "Impressions", "Clics", "CPC", "CPM"].map(h => thInfo(h))}</tr></thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={r.obj.match} style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}>
+                          <td style={{ ...S.td, fontWeight: 600 }}>{r.obj.label}</td>
+                          {budCell(r.real.spend, r.obj.budget)}
+                          {volCell(r.real.impressions, r.obj.impressions)}
+                          {volCell(r.real.clicks, r.obj.clicks)}
+                          {costCell(r.real.cpc, r.obj.cpc)}
+                          {costCell(r.real.cpm, r.obj.cpm)}
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: `2px solid ${NURU.gold}` }}>
+                        <td style={{ ...S.td, fontWeight: 800, color: NURU.gold }}>Total</td>
+                        {budCell(cs.tot.spend, objTot.budget)}
+                        {volCell(cs.tot.impressions, objTot.impressions)}
+                        {volCell(cs.tot.clicks, objTot.clicks)}
+                        {costCell(cs.tot.cpc, objTot.clicks > 0 ? objTot.budget / objTot.clicks : 0)}
+                        {costCell(cs.tot.cpm, objTot.impressions > 0 ? objTot.budget / (objTot.impressions / 1000) : 0)}
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 10, color: NURU.textDark, marginTop: 8, lineHeight: 1.6 }}>
+                    Volumes (impressions, clics) : vert = objectif atteint. Coûts (CPC, CPM) : vert = sous l'objectif estimé (plus avantageux). Les objectifs de volume ont été dépassés avec un CPM/CPC très en deçà de l'estimation.
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{ ...S.formatInfo, marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: NURU.gold, marginBottom: 6 }}>Bilan de campagne</div>
