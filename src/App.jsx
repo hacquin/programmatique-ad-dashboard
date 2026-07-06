@@ -53,6 +53,12 @@ const ALL_FORMATS = Object.keys(FORMAT_CONFIG);
 
 const CREATIVE_AXES = ["Axe creatif 1", "Axe creatif 2", "Axe creatif 3", "Axe creatif 4", "Axe creatif 5"];
 
+// Objectifs / KPI attendus de la campagne (affiches en tete du Bilan). A ajuster ici.
+const CAMPAIGN_OBJECTIVES = [
+  { label: "Impressions", key: "impressions", target: 2150000 },
+  { label: "Clics", key: "clicks", target: 10350 },
+];
+
 // =====================================================================
 // LEXIQUE
 // =====================================================================
@@ -1040,6 +1046,7 @@ export default function ProgrammaticDashboard() {
     const channels = Object.values(chanMap).map(c => ({
       ...withRatios(c),
       budgetShare: tot.spend > 0 ? (c.spend / tot.spend) * 100 : 0,
+      impressionShare: tot.impressions > 0 ? (c.impressions / tot.impressions) * 100 : 0,
       clickShare: tot.clicks > 0 ? (c.clicks / tot.clicks) * 100 : 0,
       convShare: tot.conversions > 0 ? (c.conversions / tot.conversions) * 100 : 0,
     })).sort((a, b) => b.spend - a.spend);
@@ -1081,22 +1088,39 @@ export default function ProgrammaticDashboard() {
     const weakDomains = domains.filter(d => d.spend >= 100 && d.ctr < 0.10).sort((a, b) => b.spend - a.spend).slice(0, 6);
     const wastedSpend = weakDomains.reduce((s, d) => s + d.spend, 0);
 
-    // Recommandations générées à partir des faits
+    // Objectifs vs réalisé (KPI attendus définis dans CAMPAIGN_OBJECTIVES)
+    const imprObj = CAMPAIGN_OBJECTIVES.find(o => o.key === "impressions");
+    const clicksObj = CAMPAIGN_OBJECTIVES.find(o => o.key === "clicks");
+    const targetCtr = imprObj && clicksObj && imprObj.target > 0 ? (clicksObj.target / imprObj.target) * 100 : 0;
+    const objectives = {
+      impressions: { target: imprObj ? imprObj.target : 0, pct: imprObj && imprObj.target > 0 ? (tot.impressions / imprObj.target) * 100 : 0 },
+      clicks: { target: clicksObj ? clicksObj.target : 0, pct: clicksObj && clicksObj.target > 0 ? (tot.clicks / clicksObj.target) * 100 : 0 },
+      ctr: { target: targetCtr, pct: targetCtr > 0 ? (tot.ctr / targetCtr) * 100 : 0 },
+    };
+
+    // Recommandations générées — la campagne poursuit un double objectif :
+    // TRAFIC (site CAD) porté par le canal le plus cliqué, et NOTORIÉTÉ/IMAGE qui
+    // nécessite de conserver un volume de Display pour la couverture.
     const reco = [];
     if (bestChannel && worstChannel && bestChannel.channel !== worstChannel.channel) {
-      reco.push(`Renforcer le ${bestChannel.channel} : CTR ${bestChannel.ctr.toFixed(2)}% et clic à ${bestChannel.cpc.toFixed(2)} € contre ${worstChannel.ctr.toFixed(2)}% et ${worstChannel.cpc.toFixed(2)} € pour le ${worstChannel.channel}. Il capte ${bestChannel.budgetShare.toFixed(0)} % du budget pour ${bestChannel.clickShare.toFixed(0)} % des clics.`);
+      reco.push(`Objectif trafic — continuer à s'appuyer sur le ${bestChannel.channel}, moteur des clics vers le site (CTR ${fmtPct(bestChannel.ctr)} contre ${fmtPct(worstChannel.ctr)}, clic à ${fmtCurDec(bestChannel.cpc)}) : il capte ${bestChannel.budgetShare.toFixed(0)} % du budget pour ${bestChannel.clickShare.toFixed(0)} % des clics.`);
+    }
+    if (worstChannel) {
+      reco.push(`Objectif notoriété/image — maintenir un socle de ${worstChannel.channel} pour la couverture (${worstChannel.impressionShare.toFixed(0)} % des impressions) : ne pas le couper malgré un CTR plus faible, mais l'optimiser via les grands formats visibles (300x600, 970x250) et des contextes premium.`);
     }
     if (weakDomains.length > 0) {
-      reco.push(`Exclure ou plafonner ${weakDomains.slice(0, 3).map(d => d.site).join(", ")}${weakDomains.length > 3 ? "…" : ""} : CTR sous 0,10 % pour ${fmtCur(wastedSpend)} dépensés — budget réallouable vers les sites performants.`);
+      reco.push(`Réaffecter le budget des ${weakDomains.length} site(s) à CTR quasi nul (${weakDomains.slice(0, 3).map(d => d.site).join(", ")}${weakDomains.length > 3 ? "…" : ""}, ${fmtCur(wastedSpend)}) : sans clic ni contexte qualitatif, ils ne servent ni le trafic ni l'image.`);
     }
-    if (sizes.length > 0) {
-      reco.push(`Décliner davantage le format ${sizes[0].size}, qui porte le meilleur CTR (${sizes[0].ctr.toFixed(2)} %).`);
+    if (objectives.ctr.target > 0 && objectives.ctr.pct < 100) {
+      reco.push(`Relever le taux de clic (${objectives.ctr.pct.toFixed(0)} % de l'objectif de ${fmtPct(objectives.ctr.target)}) sans sacrifier la couverture : capping de fréquence, whitelist des sites engageants et davantage de créas natives ${sizes[0] ? sizes[0].size : "600x600"}.`);
+    } else if (sizes.length > 0) {
+      reco.push(`Décliner davantage le format ${sizes[0].size}, qui porte le meilleur CTR (${fmtPct(sizes[0].ctr)}).`);
     }
     if (topCtrDomains.length > 0) {
-      reco.push(`Prioriser via whitelist les contextes les plus qualitatifs : ${topCtrDomains.slice(0, 4).map(d => d.site).join(", ")}.`);
+      reco.push(`Constituer une whitelist des contextes les plus qualitatifs : ${topCtrDomains.slice(0, 4).map(d => d.site).join(", ")}.`);
     }
 
-    return { tot, channels, bestChannel, worstChannel, personas, sizes, topCreatives, topSpendDomains, topCtrDomains, weakDomains, wastedSpend, reco, flightStart: campaignData[0]?.flightStart || "", flightEnd: campaignData[0]?.flightEnd || "" };
+    return { tot, objectives, channels, bestChannel, worstChannel, personas, sizes, topCreatives, topSpendDomains, topCtrDomains, weakDomains, wastedSpend, reco, flightStart: campaignData[0]?.flightStart || "", flightEnd: campaignData[0]?.flightEnd || "" };
   }, [campaignData, domainData, creativeRealData, creativePerformance]);
 
   // =====================================================================
@@ -1325,6 +1349,68 @@ export default function ProgrammaticDashboard() {
           const period = cs.flightStart && cs.flightEnd ? `${cs.flightStart} → ${cs.flightEnd}` : "";
           const bestPersona = [...cs.personas].filter(p => p.cpa > 0).sort((a, b) => a.cpa - b.cpa)[0] || cs.personas[0];
           return (<>
+            {/* CARTE HERO — Objectifs vs Réalisé */}
+            <div style={{ background: "linear-gradient(135deg, #1a1714 0%, #221d16 55%, #17140f 100%)", border: `1px solid ${NURU.gold}`, borderRadius: 16, padding: "24px 28px", marginBottom: 20, boxShadow: "0 10px 40px rgba(196,169,98,0.14)" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+                <span style={{ fontSize: 14, fontWeight: 900, color: NURU.gold, textTransform: "uppercase", letterSpacing: "0.1em" }}>Objectifs vs Réalisé</span>
+                <span style={{ fontSize: 11, color: NURU.textMuted }}>Performance à date par rapport aux KPI attendus</span>
+              </div>
+              {(() => {
+                const imprObj = CAMPAIGN_OBJECTIVES.find(o => o.key === "impressions");
+                const clicksObj = CAMPAIGN_OBJECTIVES.find(o => o.key === "clicks");
+                const targetCtr = imprObj && clicksObj && imprObj.target > 0 ? (clicksObj.target / imprObj.target) * 100 : 0;
+                const items = [
+                  { label: "Impressions", type: "count", realized: cs.tot.impressions, target: imprObj ? imprObj.target : 0 },
+                  { label: "Clics", type: "count", realized: cs.tot.clicks, target: clicksObj ? clicksObj.target : 0 },
+                  { label: "Taux de clic", type: "pct", realized: cs.tot.ctr, target: targetCtr },
+                ];
+                const pcts = items.map(it => it.target > 0 ? (it.realized / it.target) * 100 : 0);
+                const scaleMax = Math.max(110, ...pcts) * 1.06;      // echelle partagee, avec marge au-dela de l'objectif
+                const markerPos = (100 / scaleMax) * 100;             // position du repere "objectif" (100%)
+                const fmtVal = (it, v) => it.type === "pct" ? fmtPct(v) : fmtNum(v);
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+                    {items.map((it, idx) => {
+                      const pct = pcts[idx];
+                      const reached = pct >= 100;
+                      const col = reached ? NURU.green : NURU.goldLight;
+                      const baseW = (Math.min(pct, 100) / scaleMax) * 100;   // portion jusqu'a l'objectif
+                      const overW = (Math.max(0, pct - 100) / scaleMax) * 100; // depassement
+                      return (
+                        <div key={it.label} style={{ background: "rgba(0,0,0,0.25)", border: `1px solid ${reached ? NURU.green : NURU.cardBorder}`, borderRadius: 14, padding: "20px 22px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: NURU.text, textTransform: "uppercase", letterSpacing: "0.04em" }}>{it.label}</span>
+                            <span style={{ fontSize: 12, color: NURU.textMuted, fontWeight: 600 }}>Objectif&nbsp;{fmtVal(it, it.target)}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 46, fontWeight: 900, color: col, letterSpacing: "-0.03em", lineHeight: 0.95 }}>{fmtVal(it, it.realized)}</span>
+                            <span style={{ fontSize: 18, fontWeight: 900, color: reached ? NURU.green : NURU.gold, padding: "4px 12px", borderRadius: 22, background: reached ? NURU.greenMuted : NURU.goldMuted, marginBottom: 6, whiteSpace: "nowrap" }}>{reached ? "▲ " : ""}{pct.toFixed(0)}%</span>
+                          </div>
+                          <div style={{ position: "relative", marginBottom: 22 }}>
+                            <div style={{ height: 14, borderRadius: 7, background: "rgba(255,255,255,0.06)", overflow: "hidden", position: "relative" }}>
+                              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${baseW}%`, background: `linear-gradient(90deg, ${reached ? NURU.greenMuted : NURU.goldDark}, ${col})`, borderRadius: overW > 0 ? "7px 0 0 7px" : 7, transition: "width 0.6s ease" }} />
+                              {overW > 0 && <div style={{ position: "absolute", left: `${markerPos}%`, top: 0, bottom: 0, width: `${overW}%`, background: "repeating-linear-gradient(45deg, #6fd39a, #6fd39a 6px, #57c489 6px, #57c489 12px)", borderRadius: "0 7px 7px 0", transition: "width 0.6s ease" }} />}
+                              <div style={{ position: "absolute", left: `${markerPos}%`, top: 0, bottom: 0, width: 2, background: "rgba(255,255,255,0.85)" }} />
+                            </div>
+                            <div style={{ position: "absolute", left: `${markerPos}%`, transform: "translateX(-50%)", top: 17, fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>Objectif</div>
+                          </div>
+                          <div style={{ fontSize: 12, color: NURU.textMuted }}>
+                            {reached
+                              ? (it.type === "pct"
+                                  ? <>Objectif <strong style={{ color: NURU.green }}>dépassé de {(pct - 100).toFixed(0)} %</strong> — {fmtPct(it.realized)} vs {fmtPct(it.target)} visé</>
+                                  : <>Objectif <strong style={{ color: NURU.green }}>dépassé de {(pct - 100).toFixed(0)} %</strong> — ×{(pct / 100).toFixed(2)} la cible ({fmtNum(it.realized - it.target)} de plus)</>)
+                              : (it.type === "pct"
+                                  ? <><strong style={{ color: NURU.gold }}>{pct.toFixed(0)} %</strong> de l'objectif — {fmtPct(it.realized)} vs {fmtPct(it.target)} visé</>
+                                  : <><strong style={{ color: NURU.gold }}>{pct.toFixed(0)} %</strong> de l'objectif — il reste {fmtNum(Math.max(0, it.target - it.realized))} à réaliser</>)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
             <div style={{ ...S.formatInfo, marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: NURU.gold, marginBottom: 6 }}>Bilan de campagne</div>
               <div style={{ fontSize: 12, color: NURU.text, lineHeight: 1.6 }}>
@@ -1351,13 +1437,20 @@ export default function ProgrammaticDashboard() {
             <div style={S.grid}>
               <div style={S.card}><div style={S.cardTitle}>Points clés</div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: NURU.text, lineHeight: 1.7 }}>
-                  {cs.bestChannel && cs.worstChannel && cs.bestChannel.channel !== cs.worstChannel.channel && (
-                    <li>Le <strong>{cs.bestChannel.channel}</strong> surperforme le {cs.worstChannel.channel} : CTR {fmtPct(cs.bestChannel.ctr)} vs {fmtPct(cs.worstChannel.ctr)}, CPC {fmtCurDec(cs.bestChannel.cpc)} vs {fmtCurDec(cs.worstChannel.cpc)}.</li>
+                  {(cs.objectives.impressions.target > 0 || cs.objectives.clicks.target > 0) && (
+                    <li><strong>Objectifs de volume dépassés</strong> : impressions à {cs.objectives.impressions.pct.toFixed(0)} % et clics à {cs.objectives.clicks.pct.toFixed(0)} % de la cible — forte couverture, favorable à l'objectif <strong>notoriété</strong>.</li>
                   )}
-                  {cs.bestChannel && <li>Le {cs.bestChannel.channel} capte {cs.bestChannel.budgetShare.toFixed(0)} % du budget pour {cs.bestChannel.clickShare.toFixed(0)} % des clics{cs.tot.conversions > 0 ? ` et ${cs.bestChannel.convShare.toFixed(0)} % des conversions` : ""}.</li>}
+                  {cs.objectives.ctr.target > 0 && (
+                    <li>Taux de clic à <strong>{cs.objectives.ctr.pct.toFixed(0)} %</strong> de l'objectif ({fmtPct(cs.tot.ctr)} vs {fmtPct(cs.objectives.ctr.target)}) : la sur-livraison d'impressions dilue mécaniquement le CTR.</li>
+                  )}
+                  {cs.bestChannel && cs.worstChannel && cs.bestChannel.channel !== cs.worstChannel.channel && (
+                    <li><strong>Objectif trafic</strong> : le {cs.bestChannel.channel} porte les clics (CTR {fmtPct(cs.bestChannel.ctr)} vs {fmtPct(cs.worstChannel.ctr)}, CPC {fmtCurDec(cs.bestChannel.cpc)} vs {fmtCurDec(cs.worstChannel.cpc)}) et capte {cs.bestChannel.clickShare.toFixed(0)} % des clics.</li>
+                  )}
+                  {cs.worstChannel && (
+                    <li><strong>Objectif notoriété</strong> : le {cs.worstChannel.channel} apporte {cs.worstChannel.impressionShare.toFixed(0)} % des impressions — sa couverture reste utile à l'image malgré un CTR plus faible.</li>
+                  )}
                   {cs.sizes[0] && <li>Meilleur format créatif : <strong>{cs.sizes[0].size}</strong> ({fmtPct(cs.sizes[0].ctr)} de CTR).</li>}
-                  {cs.weakDomains.length > 0 && <li>{cs.weakDomains.length} site(s) sous-performant(s) (CTR &lt; 0,10 %) pour {fmtCur(cs.wastedSpend)} — budget optimisable.</li>}
-                  {cs.personas.length > 1 && bestPersona && <li>Cible la plus efficiente (CPA) : <strong>{bestPersona.persona}</strong>.</li>}
+                  {cs.weakDomains.length > 0 && <li>{cs.weakDomains.length} site(s) sans valeur (CTR &lt; 0,10 %) pour {fmtCur(cs.wastedSpend)} — budget optimisable.</li>}
                 </ul>
               </div>
               <div style={S.card}><div style={S.cardTitle}>Recommandations</div>
