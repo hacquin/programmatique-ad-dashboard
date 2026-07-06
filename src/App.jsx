@@ -307,9 +307,48 @@ function normalizeCreativeRow(row) {
 }
 
 // =====================================================================
+// IMPORT VALIDATION — controle des colonnes attendues par type de fichier
+// required : colonnes indispensables (import bloque si absentes)
+// anyOf    : au moins une colonne du groupe doit etre presente
+// recommended : colonne -> fonctionnalite degradee si absente (avertissement)
+// =====================================================================
+const IMPORT_SCHEMA = {
+  campaign: {
+    required: ["Campaign Name"],
+    recommended: {
+      "Impressions": "les KPIs (impressions, CPM)",
+      "Clicks": "les KPIs (clics, CTR)",
+      "Media Cost": "les depenses et les couts",
+      "Impressions Viewed": "l'onglet Visibilite",
+      "Impressions Measurable": "l'onglet Visibilite",
+      "View %": "l'onglet Visibilite",
+    },
+  },
+  domain: {
+    anyOf: [["Domains", "Domain"]],
+    recommended: { "Impressions": "l'onglet Domaines", "Media Cost": "les depenses par domaine" },
+  },
+  creative: {
+    required: ["Creatives"],
+    recommended: { "Creative Size": "l'onglet Par format (repartition par taille)", "Impressions": "les performances par creatif" },
+  },
+};
+
+// Retourne { errors: [...], warnings: [...] } pour un jeu d'entetes CSV donne.
+function validateFileHeaders(kind, fields, fileLabel) {
+  const schema = IMPORT_SCHEMA[kind] || {};
+  const errors = [], warnings = [];
+  const px = fileLabel ? fileLabel + " : " : "";
+  (schema.required || []).forEach(c => { if (!fields.includes(c)) errors.push(`${px}colonne obligatoire manquante « ${c} »`); });
+  (schema.anyOf || []).forEach(group => { if (!group.some(c => fields.includes(c))) errors.push(`${px}colonne obligatoire manquante « ${group.join(" » ou « ")} »`); });
+  Object.entries(schema.recommended || {}).forEach(([c, feat]) => { if (!fields.includes(c)) warnings.push(`${px}colonne « ${c} » absente → ${feat} sera limite.`); });
+  return { errors, warnings };
+}
+
+// =====================================================================
 // PERSISTENCE
 // =====================================================================
-const STORAGE_KEY = "nuru_dashboard_data_v1";
+const STORAGE_KEY = "nuru_dashboard_data_v2";
 function loadStoredData() {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
@@ -404,6 +443,7 @@ export default function ProgrammaticDashboard() {
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [dataSubTab, setDataSubTab] = useState("campaigns");
   const [openMetric, setOpenMetric] = useState(null);
+  const [importMsg, setImportMsg] = useState(null); // { type: "error"|"warning"|"success", title, lines: [] }
 
   const fileInputRef = useRef(null);
   const campaignFileRef = useRef(null);
@@ -426,6 +466,9 @@ export default function ProgrammaticDashboard() {
           if (camp.length === 0) return false;
           const dom = stored.domain ? parseCsv(stored.domain).map(normalizeDomainRow).filter(r => r.domain) : [];
           const crea = stored.creative ? parseCsv(stored.creative).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
+          // Un cache campagne sans creatifs rendrait les onglets "Par format" et "Par axe creatif"
+          // vides : on prefere retomber sur les CSV embarques complets plutot que de masquer les donnees.
+          if (crea.length === 0) return false;
           const mato = stored.matomo ? parseCsv(stored.matomo).map(normalizeMatomoRow).filter(r => r.rawName) : [];
           setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea); setMatomoData(mato);
           setDataMode("campaign"); setDataSource(stored.source || "Import campagne"); setRawData([]);
@@ -472,12 +515,23 @@ export default function ProgrammaticDashboard() {
   const handleFileImport = useCallback(async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
     const text = await file.text();
-    const parsed = Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
-    if (parsed.length > 0) {
-      setRawData(parsed); setDataSource(file.name); setDataMode("demo");
-      setCampaignData([]); setDomainData([]); setCreativeRealData([]);
-      saveStoredData({ mode: "demo-single", csv: text, source: file.name });
+    const res = Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true });
+    const parsed = res.data;
+    const fields = res.meta.fields || [];
+    if (parsed.length === 0) {
+      setImportMsg({ type: "error", title: "Fichier non conforme", lines: [`${file.name} : aucune ligne exploitable.`] });
+      e.target.value = "";
+      return;
     }
+    const expected = ["format", "impressions", "clicks", "spend"];
+    const missing = expected.filter(c => !fields.includes(c));
+    setRawData(parsed); setDataSource(file.name); setDataMode("demo");
+    setCampaignData([]); setDomainData([]); setCreativeRealData([]); setMatomoData([]);
+    saveStoredData({ mode: "demo-single", csv: text, source: file.name });
+    setImportMsg(missing.length > 0
+      ? { type: "warning", title: "Import realise avec des reserves", lines: [`Colonnes attendues absentes : ${missing.join(", ")}. Certains graphiques peuvent rester vides.`] }
+      : { type: "success", title: "Import reussi", lines: [`${parsed.length.toLocaleString("fr-FR")} lignes chargees depuis ${file.name}.`] });
+    e.target.value = "";
   }, []);
 
   // =====================================================================
@@ -485,24 +539,64 @@ export default function ProgrammaticDashboard() {
   // =====================================================================
   const handleCampaignImport = useCallback(async () => {
     const campFile = campaignFileRef.current?.files?.[0];
-    if (!campFile) return;
+    if (!campFile) {
+      setImportMsg({ type: "error", title: "Import impossible", lines: ["Le fichier Campaign.csv est obligatoire."] });
+      return;
+    }
     const domFile = domainFileRef.current?.files?.[0];
     const creaFile = creativeFileRef.current?.files?.[0];
     const matoFile = matomoFileRef.current?.files?.[0];
     const readText = (f) => f ? f.text() : Promise.resolve("");
     const readMatomo = (f) => f ? f.arrayBuffer().then(decodeMatomoBuffer) : Promise.resolve("");
     const [campText, domText, creaText, matoText] = await Promise.all([readText(campFile), readText(domFile), readText(creaFile), readMatomo(matoFile)]);
-    const parseCsv = (text) => Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data;
-    const camp = parseCsv(campText).map(normalizeCampaignRow).filter(r => r.campaignName);
-    const dom = domText ? parseCsv(domText).map(normalizeDomainRow).filter(r => r.domain) : [];
-    const crea = creaText ? parseCsv(creaText).map(normalizeCreativeRow).filter(r => r.creativeName) : [];
-    const mato = matoText ? parseCsv(matoText).map(normalizeMatomoRow).filter(r => r.rawName) : [];
-    if (camp.length > 0) {
-      setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea); setMatomoData(mato);
-      setDataMode("campaign"); setDataSource("Import campagne"); setRawData([]);
-      setShowImportPanel(false); setSelectedPersonas([]); setSelectedChannelTypes([]);
-      saveStoredData({ mode: "campaign", campaign: campText, domain: domText, creative: creaText, matomo: matoText, source: "Import campagne" });
+    const parseFull = (text) => { const r = Papa.parse(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }); return { rows: r.data, fields: r.meta.fields || [] }; };
+
+    const errors = [], warnings = [];
+
+    // Campaign (obligatoire)
+    const campParsed = parseFull(campText);
+    const vCamp = validateFileHeaders("campaign", campParsed.fields, "Campaign.csv");
+    errors.push(...vCamp.errors); warnings.push(...vCamp.warnings);
+    const camp = campParsed.rows.map(normalizeCampaignRow).filter(r => r.campaignName);
+    if (camp.length === 0 && vCamp.errors.length === 0) errors.push("Campaign.csv : aucune ligne exploitable.");
+
+    // Domain (optionnel)
+    let dom = [];
+    if (domText) {
+      const p = parseFull(domText);
+      const v = validateFileHeaders("domain", p.fields, "Domain.csv");
+      errors.push(...v.errors); warnings.push(...v.warnings);
+      dom = p.rows.map(normalizeDomainRow).filter(r => r.domain);
+    } else warnings.push("Aucun Domain.csv fourni \u2192 l'onglet Domaines sera vide.");
+
+    // Creatives (optionnel mais requis pour 2 onglets)
+    let crea = [];
+    if (creaText) {
+      const p = parseFull(creaText);
+      const v = validateFileHeaders("creative", p.fields, "Creatives.csv");
+      errors.push(...v.errors); warnings.push(...v.warnings);
+      crea = p.rows.map(normalizeCreativeRow).filter(r => r.creativeName);
+    } else warnings.push("Aucun Creatives.csv fourni \u2192 les onglets \u00AB Par format \u00BB et \u00AB Par axe creatif \u00BB seront limites.");
+
+    // Matomo (optionnel)
+    let mato = [];
+    if (matoText) {
+      mato = Papa.parse(matoText.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: true }).data.map(normalizeMatomoRow).filter(r => r.rawName);
+      if (mato.length === 0) warnings.push("Matomo.csv : aucune ligne exploitable (verifiez l'encodage UTF-16).");
     }
+
+    if (errors.length > 0) {
+      setImportMsg({ type: "error", title: "Fichier non conforme \u2014 import annule", lines: errors });
+      return;
+    }
+
+    setCampaignData(camp); setDomainData(dom); setCreativeRealData(crea); setMatomoData(mato);
+    setDataMode("campaign"); setDataSource("Import campagne"); setRawData([]);
+    setShowImportPanel(false); setSelectedPersonas([]); setSelectedChannelTypes([]);
+    saveStoredData({ mode: "campaign", campaign: campText, domain: domText, creative: creaText, matomo: matoText, source: "Import campagne" });
+    setImportMsg(warnings.length > 0
+      ? { type: "warning", title: "Import realise avec des reserves", lines: warnings }
+      : { type: "success", title: "Import reussi", lines: [`${camp.length} campagnes, ${dom.length} domaines, ${crea.length} creatifs charges.`] });
   }, []);
 
   // =====================================================================
@@ -1015,7 +1109,8 @@ export default function ProgrammaticDashboard() {
         <div style={{ display: "flex", gap: 6, alignItems: "center", position: "relative" }}>
           <input type="file" accept=".csv,.tsv" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileImport} />
           <button style={S.btn} onClick={() => setShowImportPanel(!showImportPanel)}>Importer</button>
-          <button style={S.btn} onClick={() => { clearStoredData(); setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setMatomoData([]); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); }}>Demo</button>
+          <button style={S.btn} title="Vide le cache et charge les donnees de demonstration" onClick={() => { clearStoredData(); setRawData(generateDemoData()); setDataSource("demo"); setDataMode("demo"); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setMatomoData([]); setSelectedFormats([]); setSelectedSubFormats([]); setSelectedDevices([]); setFilterSite("All"); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); setShowImportPanel(false); setImportMsg({ type: "success", title: "Donnees de demonstration chargees", lines: ["Le cache a ete vide et le jeu de demonstration genere."] }); }}>Demo</button>
+          <button style={{ ...S.btn, color: NURU.red, borderColor: NURU.red }} title="Remet les donnees a zero avant un nouvel import" onClick={() => { clearStoredData(); setRawData([]); setCampaignData([]); setDomainData([]); setCreativeRealData([]); setMatomoData([]); setDataMode("campaign"); setDataSource("Aucune donnee"); setSelectedFormats([]); setSelectedSubFormats([]); setSelectedDevices([]); setFilterSite("All"); setSelectedPersonas([]); setSelectedChannelTypes([]); setActiveTab("overview"); setShowImportPanel(true); setImportMsg({ type: "warning", title: "Donnees reinitialisees", lines: ["Toutes les donnees ont ete effacees. Importez de nouveaux fichiers via le panneau ci-contre."] }); }}>Reset</button>
           <button style={{ ...S.btn, borderColor: NURU.gold, color: NURU.gold }} onClick={() => setShowLexique(true)}>Lexique</button>
           {showImportPanel && (
             <div style={S.importPanel} onClick={e => e.stopPropagation()}>
@@ -1037,6 +1132,26 @@ export default function ProgrammaticDashboard() {
       </header>
 
       <main style={S.content}>
+        {/* IMPORT / DATA MESSAGE */}
+        {importMsg && (() => {
+          const color = importMsg.type === "error" ? NURU.red : importMsg.type === "success" ? NURU.green : NURU.gold;
+          const bg = importMsg.type === "error" ? NURU.redMuted : importMsg.type === "success" ? NURU.greenMuted : NURU.goldMuted;
+          const icon = importMsg.type === "error" ? "⚠" : importMsg.type === "success" ? "✓" : "ℹ";
+          return (
+            <div role="status" style={{ display: "flex", alignItems: "flex-start", gap: 12, background: bg, border: `1px solid ${color}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+              <span style={{ color, fontSize: 16, fontWeight: 800, lineHeight: 1.3 }}>{icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: importMsg.lines?.length ? 5 : 0 }}>{importMsg.title}</div>
+                {importMsg.lines?.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: NURU.text, lineHeight: 1.6 }}>
+                    {importMsg.lines.map((l, i) => <li key={i}>{l}</li>)}
+                  </ul>
+                )}
+              </div>
+              <button onClick={() => setImportMsg(null)} aria-label="Fermer" style={{ background: "transparent", border: "none", color: NURU.textMuted, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          );
+        })()}
         {/* FILTERS */}
         <div style={S.filters}>
           {dataMode === "demo" && (<>
